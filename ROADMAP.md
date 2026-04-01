@@ -2,9 +2,8 @@
 
 ## Completed
 
-- Define minimal project scope
-- Create repository docs and execution rules
-- Implement the CLI file manager
+- Replace the previous project with an auth service scope
+- Implement register, login, JWT auth, password hashing, and role-based access
 - Add unit, integration, e2e, and smoke tests
 - Add Docker, Makefile, and CI workflow
 - Complete local validation, Docker validation, and dependency audit

@@ -1,59 +1,88 @@
-# CLI File Manager
+# Auth Service
 
-Minimal Node.js CLI file manager built to practice core runtime APIs instead of web frameworks.
+Minimal Express.js auth backend built to practice authentication and authorization fundamentals.
 
 ## Scope
 
-- Navigate directories
-- Read files
-- Write files
-- Search files by name
-- Stream large files through Node streams
+- Register
+- Login
+- JWT authentication
+- Password hashing
+- Role-based access
 
 ## Stack
 
 - Node.js `24.14.1` Active LTS
-- Core modules: `fs`, `stream`, `buffer`, `process`, `readline`
+- Express `5.2.1`
+- jsonwebtoken `9.0.3`
+- Core crypto: `randomBytes`, `scryptSync`, `timingSafeEqual`
 - ESLint `10.1.0`
 - c8 `11.0.0`
+- Supertest `7.2.2`
 - Docker Compose
 
-## Commands
+## API
 
-- `pwd`
-- `ls`
-- `cd <path>`
-- `up`
-- `read <path>`
-- `write <path> <content>`
-- `find <query> [path]`
-- `stream <source> <destination>`
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/me`
+- `GET /admin`
 
-Use quotes when a path or content contains spaces.
+Register and login request body:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+Authenticated user response:
+
+```json
+{
+  "id": 2,
+  "email": "user@example.com",
+  "role": "user"
+}
+```
+
+Login response:
+
+```json
+{
+  "token": "jwt"
+}
+```
+
+The Docker runtime seeds one admin account:
+
+- email: `admin@example.com`
+- password: `admin-password`
 
 ## Local Run
 
 ```bash
-docker compose run --rm app
+docker compose up --build
 ```
 
-The container starts in `/workspace`, which is the mounted project directory.
+The API listens on [http://localhost:3000](http://localhost:3000).
 
 ## Validation
 
 ```bash
 make check
+make docker-up
+make request-smoke
 make docker-test
-make docker-smoke
+make docker-down
 ```
 
-## Example Session
+`make check` runs lint, coverage, and `npm audit` on the host. `make docker-test` runs the containerized lint and coverage path.
 
-```text
-pwd
-ls
-write "notes file.txt" "hello world"
-read "notes file.txt"
-find .txt
-stream "notes file.txt" copy.txt
+## Example Requests
+
+```bash
+curl -X POST http://localhost:3000/auth/register -H 'Content-Type: application/json' -d '{"email":"user@example.com","password":"password123"}'
+curl -X POST http://localhost:3000/auth/login -H 'Content-Type: application/json' -d '{"email":"user@example.com","password":"password123"}'
 ```

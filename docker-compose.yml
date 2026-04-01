@@ -1,15 +1,30 @@
 services:
-  app:
+  api:
     build:
       context: .
       target: runtime
-    image: cli-file-manager:runtime
-    stdin_open: true
-    tty: true
-    volumes:
-      - .:/workspace
+    image: auth-service:runtime
+    environment:
+      PORT: "3000"
+      JWT_SECRET: local-jwt-secret
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: admin-password
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/auth/me').then(()=>process.exit(0)).catch(()=>process.exit(1))
+      interval: 1s
+      timeout: 3s
+      retries: 30
+      start_period: 1s
   test:
     build:
       context: .
       target: test
-    image: cli-file-manager:test
+    image: auth-service:test
+    profiles:
+      - test
