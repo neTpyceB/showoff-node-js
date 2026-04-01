@@ -24,7 +24,7 @@ docker-build:
 	docker compose build
 
 docker-up:
-	docker compose up --build -d
+	docker compose up --build -d --wait
 
 docker-down:
 	docker compose down --remove-orphans
@@ -33,4 +33,5 @@ docker-test:
 	docker compose run --rm test
 
 request-smoke:
+	node scripts/wait-for-http.js http://localhost:3000/items 30 1000
 	curl --fail http://localhost:3000/items

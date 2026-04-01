@@ -17,7 +17,8 @@
     "test": "npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:smoke",
     "coverage": "c8 --100 npm run test",
     "audit": "npm audit --audit-level=low",
-    "check": "npm run lint && npm run coverage && npm run audit"
+    "check": "npm run lint && npm run coverage && npm run audit",
+    "wait:http": "node scripts/wait-for-http.js"
   },
   "dependencies": {
     "express": "5.2.1",

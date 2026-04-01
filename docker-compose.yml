@@ -6,6 +6,16 @@ services:
     image: simple-rest-api:runtime
     ports:
       - "3000:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/items').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+      interval: 1s
+      timeout: 3s
+      retries: 30
+      start_period: 1s
   test:
     build:
       context: .
