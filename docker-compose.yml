@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    image: cli-file-manager:runtime
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/workspace
+  test:
+    build:
+      context: .
+      target: test
+    image: cli-file-manager:test
