@@ -2,9 +2,9 @@
 
 ## Current Position
 
-- No network surface
-- No third-party runtime dependencies
-- File access is limited to paths the operator chooses to open from the current working directory context
+- HTTP surface limited to the documented `items` endpoints
+- Validation rejects invalid item ids and invalid item names
+- Error responses are JSON and do not expose stack traces
 
 ## Verification
 

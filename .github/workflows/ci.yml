@@ -22,4 +22,6 @@ jobs:
       - uses: actions/checkout@v5
       - run: docker compose build
       - run: docker compose run --rm test
-      - run: printf 'pwd\n' | docker compose run --rm -T app
+      - run: docker compose up -d api
+      - run: curl --fail http://localhost:3000/items
+      - run: docker compose down --remove-orphans

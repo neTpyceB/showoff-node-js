@@ -2,8 +2,8 @@
 
 Not implemented.
 
-- Binary file inspection using buffers
-- File hashing with `crypto`
-- Watch mode with `fs.watch`
+- Persistent storage with a database
+- Authentication
+- Pagination or filtering
 
 These remain outside the current scope until explicitly required.

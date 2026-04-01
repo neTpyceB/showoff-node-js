@@ -1,15 +1,15 @@
 services:
-  app:
+  api:
     build:
       context: .
       target: runtime
-    image: cli-file-manager:runtime
-    stdin_open: true
-    tty: true
-    volumes:
-      - .:/workspace
+    image: simple-rest-api:runtime
+    ports:
+      - "3000:3000"
   test:
     build:
       context: .
       target: test
-    image: cli-file-manager:test
+    image: simple-rest-api:test
+    profiles:
+      - test
