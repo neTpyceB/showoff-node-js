@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: install lint test coverage audit check docker-build docker-run docker-test docker-smoke
+.PHONY: install lint test coverage audit check docker-build docker-up docker-down docker-test request-smoke
 
 install:
 	npm install
@@ -23,11 +23,15 @@ check:
 docker-build:
 	docker compose build
 
-docker-run:
-	docker compose run --rm app
+docker-up:
+	docker compose up --build -d --wait
+
+docker-down:
+	docker compose down --remove-orphans
 
 docker-test:
 	docker compose run --rm test
 
-docker-smoke:
-	printf 'pwd\n' | docker compose run --rm -T app
+request-smoke:
+	node scripts/wait-for-http.js http://localhost:3000/items 30 1000
+	curl --fail http://localhost:3000/items

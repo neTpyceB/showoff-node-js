@@ -2,21 +2,25 @@
 
 ## Shape
 
-- `src/file-manager.js`: filesystem state and core operations
-- `src/command.js`: command parsing and dispatch
-- `src/cli.js`: stdin-driven runtime loop
+- `src/app.js`: Express app composition
+- `src/server.js`: HTTP server entrypoint
+- `src/items/router.js`: CRUD routes
+- `src/items/store.js`: in-memory item storage
+- `src/items/validators.js`: request validation
+- `src/middleware/logger.js`: request logging middleware
+- `src/middleware/errors.js`: not-found and error middleware
 
 ## Runtime
 
-- `FileManager` owns the current working directory.
-- Commands resolve against that directory.
-- File writes use `Buffer.from(...)`.
-- Large file copying uses `pipeline(...)` with a counting `Transform`.
-- CLI input is processed line by line from `process.stdin`.
+- The app exposes a single `items` resource.
+- Storage is process-local memory because no database was required.
+- Validation accepts only the required payload field: `name`.
+- Errors are returned as JSON with HTTP status codes.
+- Each request is logged with method, path, status code, and duration.
 
 ## Test Layers
 
-- Unit: command parsing and dispatch
-- Integration: filesystem behavior against temp directories
-- E2E: spawned CLI process over real stdin/stdout
-- Smoke: minimal startup and command execution path
+- Unit: validators, store, logger, and error middleware
+- Integration: app behavior through Express without opening a network port
+- E2E: spawned server process over real HTTP
+- Smoke: startup plus a minimal real request

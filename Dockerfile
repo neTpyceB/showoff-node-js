@@ -1,5 +1,5 @@
 FROM node:24.14.1-alpine3.22 AS deps
-WORKDIR /opt/file-manager
+WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
@@ -8,6 +8,9 @@ COPY . .
 CMD ["npm", "run", "check"]
 
 FROM node:24.14.1-alpine3.22 AS runtime
-WORKDIR /workspace
-COPY src /opt/file-manager/src
-CMD ["node", "/opt/file-manager/src/cli.js"]
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
+COPY src ./src
+EXPOSE 3000
+CMD ["npm", "start"]
