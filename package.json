@@ -1,0 +1,29 @@
+{
+  "name": "cli-file-manager",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal Node.js CLI file manager focused on core runtime APIs.",
+  "type": "module",
+  "bin": {
+    "file-manager": "./src/cli.js"
+  },
+  "engines": {
+    "node": "24.14.1"
+  },
+  "scripts": {
+    "start": "node src/cli.js",
+    "lint": "eslint .",
+    "test:unit": "node --test \"test/unit/**/*.test.js\"",
+    "test:integration": "node --test \"test/integration/**/*.test.js\"",
+    "test:e2e": "node --test \"test/e2e/**/*.test.js\"",
+    "test:smoke": "node --test \"test/smoke/**/*.test.js\"",
+    "test": "npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:smoke",
+    "coverage": "c8 --100 npm run test",
+    "audit": "npm audit --audit-level=low",
+    "check": "npm run lint && npm run coverage && npm run audit"
+  },
+  "devDependencies": {
+    "c8": "11.0.0",
+    "eslint": "10.1.0"
+  }
+}
