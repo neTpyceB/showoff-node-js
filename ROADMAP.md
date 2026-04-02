@@ -2,15 +2,15 @@
 
 ## Completed
 
-- Replace the previous project with an auth service scope
-- Implement register, login, JWT auth, password hashing, and role-based access
+- Replace the previous project with a data processing service scope
+- Implement streamed CSV and JSON transforms with streamed exports
 - Add unit, integration, e2e, and smoke tests
 - Add Docker, Makefile, and CI workflow
 - Complete local validation, Docker validation, and dependency audit
 
 ## Current
 
-- Scope is complete and verified
+- Repository matches the current streaming service scope
 
 ## Next
 

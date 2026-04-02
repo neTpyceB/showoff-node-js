@@ -2,10 +2,10 @@
 
 ## Dependencies
 
-- Runtime dependencies: `express@5.2.1`, `jsonwebtoken@9.0.3`
-- Dev dependencies: `eslint@10.1.0`, `c8@11.0.0`, `supertest@7.2.2`
+- Runtime dependencies: `csv-parse@6.2.1`, `csv-stringify@6.7.0`, `stream-json@2.1.0`
+- Dev dependencies: `eslint@10.1.0`, `c8@11.0.0`
 
 ## Result
 
 - `npm audit --audit-level=low`: passed
-- Audit date: 2026-04-01
+- Audit date: 2026-04-02

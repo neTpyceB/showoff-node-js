@@ -3,12 +3,9 @@ services:
     build:
       context: .
       target: runtime
-    image: auth-service:runtime
+    image: data-processing-service:runtime
     environment:
       PORT: "3000"
-      JWT_SECRET: local-jwt-secret
-      ADMIN_EMAIL: admin@example.com
-      ADMIN_PASSWORD: admin-password
     ports:
       - "3000:3000"
     healthcheck:
@@ -16,7 +13,7 @@ services:
         - CMD
         - node
         - -e
-        - fetch('http://127.0.0.1:3000/auth/me').then(()=>process.exit(0)).catch(()=>process.exit(1))
+        - fetch('http://127.0.0.1:3000/transform/csv-to-ndjson',{method:'POST',headers:{'Content-Type':'text/csv'},body:'name\nalice\n'}).then(async(response)=>process.exit(response.ok&&await response.text()==='{\"name\":\"alice\"}\n'?0:1)).catch(()=>process.exit(1))
       interval: 1s
       timeout: 3s
       retries: 30
@@ -25,6 +22,6 @@ services:
     build:
       context: .
       target: test
-    image: auth-service:test
+    image: data-processing-service:test
     profiles:
       - test

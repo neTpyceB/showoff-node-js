@@ -1,8 +1,8 @@
 {
-  "name": "auth-service",
+  "name": "data-processing-service",
   "version": "1.0.0",
   "private": true,
-  "description": "Minimal Express.js auth service with JWT, password hashing, and role-based access.",
+  "description": "Streaming data processing service for large CSV and JSON files.",
   "type": "module",
   "engines": {
     "node": ">=24.14.0 <25"
@@ -12,23 +12,22 @@
     "lint": "eslint .",
     "test:unit": "node --test \"test/unit/**/*.test.js\"",
     "test:integration": "node --test \"test/integration/**/*.test.js\"",
-    "test:e2e": "node --test test/e2e/auth.test.js",
-    "test:smoke": "node --test test/smoke/server.test.js",
+    "test:e2e": "node --test test/e2e/service.test.js",
+    "test:smoke": "node --test test/smoke/service.test.js",
     "test": "npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:smoke",
     "coverage": "c8 --100 npm run test",
     "audit": "npm audit --audit-level=low",
     "check": "npm run lint && npm run coverage && npm run audit",
     "check:container": "npm run lint && npm run coverage",
-    "wait:http": "node scripts/wait-for-http.js",
-    "smoke:http": "node scripts/smoke-auth.js"
+    "smoke:http": "node scripts/request-smoke.js"
   },
   "dependencies": {
-    "express": "5.2.1",
-    "jsonwebtoken": "9.0.3"
+    "csv-parse": "6.2.1",
+    "csv-stringify": "6.7.0",
+    "stream-json": "2.1.0"
   },
   "devDependencies": {
     "c8": "11.0.0",
-    "eslint": "10.1.0",
-    "supertest": "7.2.2"
+    "eslint": "10.1.0"
   }
 }

@@ -2,8 +2,8 @@
 
 Not implemented.
 
-- Refresh tokens
-- Persistent database storage
-- Password reset flow
+- Additional export formats
+- File-based job storage
+- Compression pipelines
 
 These remain outside the current scope until explicitly required.

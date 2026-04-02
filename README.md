@@ -1,64 +1,73 @@
-# Auth Service
+# Data Processing Service
 
-Minimal Express.js auth backend built to practice authentication and authorization fundamentals.
+Minimal Node.js streaming service built to process large CSV and JSON files without loading them into memory.
 
 ## Scope
 
-- Register
-- Login
-- JWT authentication
-- Password hashing
-- Role-based access
+- Process large CSV files
+- Process large JSON files
+- Transform data streams
+- Export transformed results
 
 ## Stack
 
 - Node.js `24.14.1` Active LTS
-- Express `5.2.1`
-- jsonwebtoken `9.0.3`
-- Core crypto: `randomBytes`, `scryptSync`, `timingSafeEqual`
+- Core modules: `http`, `stream`, `stream/promises`
+- csv-parse `6.2.1`
+- csv-stringify `6.7.0`
+- stream-json `2.1.0`
 - ESLint `10.1.0`
 - c8 `11.0.0`
-- Supertest `7.2.2`
 - Docker Compose
 
 ## API
 
-- `POST /auth/register`
-- `POST /auth/login`
-- `GET /auth/me`
-- `GET /admin`
+- `POST /transform/csv-to-ndjson`
+- `POST /transform/json-to-csv`
 
-Register and login request body:
+`POST /transform/csv-to-ndjson`
+
+Input:
+
+```csv
+name,score
+alice,10
+bob,20
+```
+
+Output:
+
+```json
+{"name":"alice","score":"10"}
+{"name":"bob","score":"20"}
+```
+
+`POST /transform/json-to-csv`
+
+Input:
+
+```json
+[
+  { "name": "alice", "score": 10 },
+  { "name": "bob", "score": 20 }
+]
+```
+
+Output:
+
+```csv
+name,score
+alice,10
+bob,20
+```
+
+Errors are returned as:
 
 ```json
 {
-  "email": "user@example.com",
-  "password": "password123"
+  "error": "Message"
 }
 ```
-
-Authenticated user response:
-
-```json
-{
-  "id": 2,
-  "email": "user@example.com",
-  "role": "user"
-}
-```
-
-Login response:
-
-```json
-{
-  "token": "jwt"
-}
-```
-
-The Docker runtime seeds one admin account:
-
-- email: `admin@example.com`
-- password: `admin-password`
 
 ## Local Run
 
@@ -83,6 +92,11 @@ make docker-down
 ## Example Requests
 
 ```bash
-curl -X POST http://localhost:3000/auth/register -H 'Content-Type: application/json' -d '{"email":"user@example.com","password":"password123"}'
-curl -X POST http://localhost:3000/auth/login -H 'Content-Type: application/json' -d '{"email":"user@example.com","password":"password123"}'
+curl -X POST http://localhost:3000/transform/csv-to-ndjson \
+  -H 'Content-Type: text/csv' \
+  --data-binary $'name,score\nalice,10\nbob,20\n'
+
+curl -X POST http://localhost:3000/transform/json-to-csv \
+  -H 'Content-Type: application/json' \
+  --data-binary '[{"name":"alice","score":10},{"name":"bob","score":20}]'
 ```
