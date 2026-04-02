@@ -1,5 +1,9 @@
 node_modules/
 coverage/
 tmp/
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.log
 .idea/

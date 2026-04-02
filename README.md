@@ -1,73 +1,73 @@
-# Data Processing Service
+# Realtime Chat Backend
 
-Minimal Node.js streaming service built to process large CSV and JSON files without loading them into memory.
+Minimal WebSocket chat backend with rooms, message broadcasting, presence tracking, and SQLite message persistence.
 
 ## Scope
 
-- Process large CSV files
-- Process large JSON files
-- Transform data streams
-- Export transformed results
+- Rooms through the WebSocket query string
+- Message broadcasting inside a room
+- Presence updates on join and leave
+- Persisted room history on reconnect
 
 ## Stack
 
 - Node.js `24.14.1` Active LTS
-- Core modules: `http`, `stream`, `stream/promises`
-- csv-parse `6.2.1`
-- csv-stringify `6.7.0`
-- stream-json `2.1.0`
+- Core modules: `http`
+- ws `8.20.0`
+- better-sqlite3 `12.8.0`
 - ESLint `10.1.0`
 - c8 `11.0.0`
 - Docker Compose
 
-## API
+## Protocol
 
-- `POST /transform/csv-to-ndjson`
-- `POST /transform/json-to-csv`
-
-`POST /transform/csv-to-ndjson`
-
-Input:
-
-```csv
-name,score
-alice,10
-bob,20
-```
-
-Output:
+- WebSocket route: `ws://localhost:3000/chat?room=<room>&user=<user>`
+- Inbound event:
 
 ```json
-{"name":"alice","score":"10"}
-{"name":"bob","score":"20"}
+{ "type": "message", "body": "hello" }
 ```
 
-`POST /transform/json-to-csv`
-
-Input:
-
-```json
-[
-  { "name": "alice", "score": 10 },
-  { "name": "bob", "score": 20 }
-]
-```
-
-Output:
-
-```csv
-name,score
-alice,10
-bob,20
-```
-
-Errors are returned as:
+- Outbound history event:
 
 ```json
 {
-  "error": "Message"
+  "type": "history",
+  "room": "general",
+  "messages": [
+    {
+      "room": "general",
+      "user": "alice",
+      "body": "hello",
+      "createdAt": "2026-04-02T12:00:00.000Z"
+    }
+  ]
 }
 ```
+
+- Outbound presence event:
+
+```json
+{
+  "type": "presence",
+  "room": "general",
+  "users": ["alice", "bob"]
+}
+```
+
+- Outbound message event:
+
+```json
+{
+  "type": "message",
+  "room": "general",
+  "user": "alice",
+  "body": "hello",
+  "createdAt": "2026-04-02T12:00:00.000Z"
+}
+```
+
+Plain HTTP requests return `426` with `{"error":"WebSocket upgrade required"}`.
 
 ## Local Run
 
@@ -75,7 +75,7 @@ Errors are returned as:
 docker compose up --build
 ```
 
-The API listens on [http://localhost:3000](http://localhost:3000).
+The backend listens on [http://localhost:3000](http://localhost:3000) for HTTP upgrade and [ws://localhost:3000/chat](ws://localhost:3000/chat) for chat clients.
 
 ## Validation
 
@@ -87,16 +87,4 @@ make docker-test
 make docker-down
 ```
 
-`make check` runs lint, coverage, and `npm audit` on the host. `make docker-test` runs the containerized lint and coverage path.
-
-## Example Requests
-
-```bash
-curl -X POST http://localhost:3000/transform/csv-to-ndjson \
-  -H 'Content-Type: text/csv' \
-  --data-binary $'name,score\nalice,10\nbob,20\n'
-
-curl -X POST http://localhost:3000/transform/json-to-csv \
-  -H 'Content-Type: application/json' \
-  --data-binary '[{"name":"alice","score":10},{"name":"bob","score":20}]'
-```
+`make check` runs migrations, lint, 100% coverage, and `npm audit`. `make docker-test` runs the containerized migration, lint, and coverage path.

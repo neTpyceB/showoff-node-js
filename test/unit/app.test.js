@@ -1,39 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { EventEmitter } from 'node:events';
-import { Readable } from 'node:stream';
-import { createHandler } from '../../src/app.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createApp } from '../../src/app.js';
 
-test('csv-to-ndjson waits for drain when the response applies backpressure', async () => {
-  const request = Readable.from(['name\nalice\n']);
-  request.method = 'POST';
-  request.url = '/transform/csv-to-ndjson';
+test('http requests receive upgrade required', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'chat-app-'));
+  const databasePath = join(directory, 'chat.sqlite');
+  const app = createApp({ databasePath });
 
-  const response = Object.assign(new EventEmitter(), {
-    headers: {},
-    statusCode: 0,
-    writableEnded: false,
-    setHeader(name, value) {
-      this.headers[name] = value;
-    },
-    write(chunk) {
-      this.body = `${this.body ?? ''}${chunk.toString()}`;
-      setImmediate(() => this.emit('drain'));
-      return false;
-    },
-    end(callback) {
-      this.writableEnded = true;
-      callback?.();
-    },
-    destroy(error) {
-      throw error;
-    }
-  });
+  try {
+    await new Promise((resolve) => {
+      app.server.listen(0, '127.0.0.1', resolve);
+    });
 
-  await createHandler()(request, response);
+    const { port } = app.server.address();
+    const response = await fetch(`http://127.0.0.1:${port}`);
 
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.headers['Content-Type'], 'application/x-ndjson');
-  assert.equal(response.body, '{"name":"alice"}\n');
-  assert.equal(response.writableEnded, true);
+    assert.equal(response.status, 426);
+    assert.equal(await response.text(), '{"error":"WebSocket upgrade required"}');
+  } finally {
+    await app.close();
+    await rm(directory, { force: true, recursive: true });
+  }
 });

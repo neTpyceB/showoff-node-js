@@ -2,14 +2,15 @@
 
 ## Current Position
 
-- Request bodies are streamed directly instead of buffered into memory
-- Unknown routes return JSON errors
-- Invalid CSV and invalid JSON return JSON errors
-- The service does not persist uploaded data
+- Only the documented WebSocket route accepts chat traffic
+- Plain HTTP requests do not expose chat data and return `426`
+- Messages are persisted only to the local SQLite database configured by `DATABASE_PATH`
+- Invalid WebSocket payloads are rejected by closing the socket
+- No authentication is implemented because it is outside the current scope
 
 ## Verification
 
 - `npm audit --audit-level=low`
 - Docker build validation
-- Containerized check run
-- Real streaming flow over Dockerized HTTP
+- Containerized migration and check run
+- Real WebSocket chat flow over Docker

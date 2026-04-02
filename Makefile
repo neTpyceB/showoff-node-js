@@ -1,11 +1,15 @@
 SHELL := /bin/sh
 
 API_URL := http://localhost:3000
+DATABASE_PATH := tmp/chat.sqlite
 
-.PHONY: install lint test coverage audit check docker-build docker-up docker-down docker-test request-smoke
+.PHONY: install migrate lint test coverage audit check docker-build docker-up docker-down docker-test request-smoke
 
 install:
-	npm install
+	npm ci
+
+migrate:
+	DATABASE_PATH=$(DATABASE_PATH) npm run migrate
 
 lint:
 	npm run lint
@@ -20,7 +24,7 @@ audit:
 	npm run audit
 
 check:
-	npm run check
+	DATABASE_PATH=$(DATABASE_PATH) npm run check
 
 docker-build:
 	docker compose build api test
