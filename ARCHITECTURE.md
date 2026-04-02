@@ -2,28 +2,23 @@
 
 ## Shape
 
-- `src/app.js`: Express app composition
+- `src/app.js`: route dispatch and response handling
 - `src/server.js`: HTTP server entrypoint
-- `src/auth/router.js`: register, login, and current-user routes
-- `src/auth/store.js`: in-memory user storage
-- `src/auth/password.js`: password hashing and verification
-- `src/auth/tokens.js`: JWT issuing and verification
-- `src/middleware/auth.js`: authentication and role checks
-- `src/middleware/errors.js`: JSON error handling
-- `src/middleware/logger.js`: request logging
+- `src/errors.js`: error mapping and JSON error responses
+- `src/transforms/csv-to-ndjson.js`: streamed CSV parsing to NDJSON export
+- `src/transforms/json-to-csv.js`: streamed JSON array parsing to CSV export
 
 ## Runtime
 
-- Users are stored in process memory because no database was required.
-- Registration creates `user` accounts only.
-- An admin account is seeded from environment variables at startup.
-- Passwords are hashed with Node core `scrypt`.
-- JWT bearer tokens carry `sub` and `role`.
-- `/admin` is restricted to the `admin` role.
+- The service uses raw Node HTTP request and response streams.
+- Each endpoint is implemented as a `pipeline(...)` chain, so backpressure is handled by Node streams.
+- CSV input is parsed row by row and exported as NDJSON.
+- JSON input is parsed as a streamed array and exported as CSV.
+- Results are written directly to the response stream instead of buffering entire files in memory.
 
 ## Test Layers
 
-- Unit: password hashing, token handling, store, validators, and middleware
-- Integration: full app flows through Express
+- Unit: transform pipelines and error mapping
+- Integration: full handler flows through HTTP
 - E2E: spawned server process over real HTTP
-- Smoke: startup plus minimal authenticated-surface readiness
+- Smoke: startup plus a minimal streaming request

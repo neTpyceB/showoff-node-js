@@ -1,39 +1,69 @@
-import express from 'express';
-import { createAuthRouter } from './auth/router.js';
-import { hashPassword } from './auth/password.js';
-import { createUserStore } from './auth/store.js';
-import { createAuthMiddleware, requireRole } from './middleware/auth.js';
-import { createErrorHandler, notFound } from './middleware/errors.js';
-import { createLoggerMiddleware } from './middleware/logger.js';
+import { Writable } from 'node:stream';
+import { csvToNdjson } from './transforms/csv-to-ndjson.js';
+import { jsonToCsv } from './transforms/json-to-csv.js';
+import { mapError, sendJsonError } from './errors.js';
 
-export function createApp({
-  adminEmail,
-  adminPassword,
-  jwtSecret,
-  log = process.stdout.write.bind(process.stdout)
-}) {
-  const app = express();
-  const store = createUserStore();
+function createResponseWriter(response, contentType) {
+  let started = false;
 
-  store.create({
-    email: adminEmail,
-    passwordHash: hashPassword(adminPassword),
-    role: 'admin'
-  });
+  return {
+    started: () => started,
+    writable: new Writable({
+      write(chunk, _encoding, callback) {
+        if (!started) {
+          response.statusCode = 200;
+          response.setHeader('Content-Type', contentType);
+          started = true;
+        }
 
-  app.use(createLoggerMiddleware(log));
-  app.use(express.json());
-  app.use(
-    '/auth',
-    createAuthRouter({
-      store,
-      jwtSecret,
-      requireAuth: createAuthMiddleware({ store, jwtSecret }),
-      requireRole
+        if (response.write(chunk)) {
+          callback();
+          return;
+        }
+
+        response.once('drain', callback);
+      },
+      final(callback) {
+        if (!started) {
+          response.statusCode = 200;
+          response.setHeader('Content-Type', contentType);
+        }
+
+        response.end(callback);
+      }
     })
-  );
-  app.use(notFound);
-  app.use(createErrorHandler());
+  };
+}
 
-  return app;
+async function handleTransform(request, response, contentType, transform) {
+  const writer = createResponseWriter(response, contentType);
+
+  try {
+    await transform(request, writer.writable);
+  } catch (error) {
+    const mapped = mapError(error);
+
+    if (writer.started() || response.writableEnded) {
+      response.destroy(error);
+      return;
+    }
+
+    sendJsonError(response, mapped.status, mapped.message);
+  }
+}
+
+export function createHandler() {
+  return async (request, response) => {
+    if (request.method === 'POST' && request.url === '/transform/csv-to-ndjson') {
+      await handleTransform(request, response, 'application/x-ndjson', csvToNdjson);
+      return;
+    }
+
+    if (request.method === 'POST' && request.url === '/transform/json-to-csv') {
+      await handleTransform(request, response, 'text/csv; charset=utf-8', jsonToCsv);
+      return;
+    }
+
+    sendJsonError(response, 404, 'Route not found');
+  };
 }
