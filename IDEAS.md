@@ -2,8 +2,8 @@
 
 Not implemented.
 
-- Persistent storage with a database
-- Authentication
-- Pagination or filtering
+- Refresh tokens
+- Persistent database storage
+- Password reset flow
 
 These remain outside the current scope until explicitly required.

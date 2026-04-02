@@ -1,16 +1,15 @@
-export function createLoggerMiddleware(logger) {
+export function createLoggerMiddleware(log = process.stdout.write.bind(process.stdout)) {
   return (req, res, next) => {
-    const start = process.hrtime.bigint();
+    const startedAt = process.hrtime.bigint();
 
     res.on('finish', () => {
-      logger.info(
-        {
-          durationMs: Number(process.hrtime.bigint() - start) / 1e6,
+      log(
+        `${JSON.stringify({
+          durationMs: Number(process.hrtime.bigint() - startedAt) / 1e6,
           method: req.method,
           path: req.originalUrl,
           statusCode: res.statusCode
-        },
-        'request completed'
+        })}\n`
       );
     });
 

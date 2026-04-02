@@ -1,23 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseItemId, parseItemName } from '../../src/items/validators.js';
+import { parseCredentials, parseEmail, parsePassword } from '../../src/auth/validators.js';
 
-test('parseItemId accepts positive integer strings', () => {
-  assert.equal(parseItemId('1'), 1);
+test('validators accept valid credentials', () => {
+  assert.equal(parseEmail('user@example.com'), 'user@example.com');
+  assert.equal(parsePassword('password123'), 'password123');
+  assert.deepEqual(parseCredentials({ email: 'user@example.com', password: 'password123' }), {
+    email: 'user@example.com',
+    password: 'password123'
+  });
 });
 
-test('parseItemId rejects invalid values', () => {
-  assert.throws(() => parseItemId('0'), /Invalid item id/);
-  assert.throws(() => parseItemId('01'), /Invalid item id/);
-  assert.throws(() => parseItemId('abc'), /Invalid item id/);
-});
-
-test('parseItemName accepts the required payload', () => {
-  assert.equal(parseItemName({ name: 'first' }), 'first');
-});
-
-test('parseItemName rejects invalid payloads', () => {
-  assert.throws(() => parseItemName({}), /Invalid item name/);
-  assert.throws(() => parseItemName({ name: '' }), /Invalid item name/);
-  assert.throws(() => parseItemName(null), /Invalid item name/);
+test('validators reject invalid credentials', () => {
+  assert.throws(() => parseEmail('userexample.com'), /Invalid email/);
+  assert.throws(() => parsePassword(''), /Invalid password/);
+  assert.throws(() => parseCredentials({ email: '', password: '' }), /Invalid email/);
 });

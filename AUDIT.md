@@ -2,7 +2,7 @@
 
 ## Dependencies
 
-- Runtime dependencies: `express@5.2.1`, `pino@10.3.1`
+- Runtime dependencies: `express@5.2.1`, `jsonwebtoken@9.0.3`
 - Dev dependencies: `eslint@10.1.0`, `c8@11.0.0`, `supertest@7.2.2`
 
 ## Result

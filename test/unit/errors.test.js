@@ -29,35 +29,26 @@ test('notFound forwards a 404 error', () => {
   assert.equal(forwarded.message, 'Route not found');
 });
 
-test('error handler returns known errors without logging', () => {
-  const logs = [];
-  const handleError = createErrorHandler({
-    error(entry) {
-      logs.push(entry);
-    }
-  });
-  const res = createResponse();
+test('error handler formats known errors', () => {
+  const handleError = createErrorHandler();
+  const response = createResponse();
 
-  handleError(new HttpError(400, 'Invalid item name'), {}, res, () => {});
+  handleError(new HttpError(401, 'Authentication required'), {}, response, () => {});
 
-  assert.equal(res.statusCode, 400);
-  assert.deepEqual(res.body, { error: 'Invalid item name' });
-  assert.deepEqual(logs, []);
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.body, { error: 'Authentication required' });
 });
 
-test('error handler hides unknown errors and logs them', () => {
-  const logs = [];
-  const handleError = createErrorHandler({
-    error(entry) {
-      logs.push(entry);
-    }
-  });
-  const res = createResponse();
-  const error = new Error('boom');
+test('error handler formats invalid json and unknown errors', () => {
+  const handleError = createErrorHandler();
+  const invalidJson = createResponse();
+  const unknown = createResponse();
 
-  handleError(error, {}, res, () => {});
+  handleError({ type: 'entity.parse.failed' }, {}, invalidJson, () => {});
+  handleError(new Error('boom'), {}, unknown, () => {});
 
-  assert.equal(res.statusCode, 500);
-  assert.deepEqual(res.body, { error: 'Internal server error' });
-  assert.deepEqual(logs, [error]);
+  assert.equal(invalidJson.statusCode, 400);
+  assert.deepEqual(invalidJson.body, { error: 'Invalid JSON' });
+  assert.equal(unknown.statusCode, 500);
+  assert.deepEqual(unknown.body, { error: 'Internal server error' });
 });

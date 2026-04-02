@@ -3,7 +3,12 @@ services:
     build:
       context: .
       target: runtime
-    image: simple-rest-api:runtime
+    image: auth-service:runtime
+    environment:
+      PORT: "3000"
+      JWT_SECRET: local-jwt-secret
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: admin-password
     ports:
       - "3000:3000"
     healthcheck:
@@ -11,7 +16,7 @@ services:
         - CMD
         - node
         - -e
-        - fetch('http://127.0.0.1:3000/items').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+        - fetch('http://127.0.0.1:3000/auth/me').then(()=>process.exit(0)).catch(()=>process.exit(1))
       interval: 1s
       timeout: 3s
       retries: 30
@@ -20,6 +25,6 @@ services:
     build:
       context: .
       target: test
-    image: simple-rest-api:test
+    image: auth-service:test
     profiles:
       - test

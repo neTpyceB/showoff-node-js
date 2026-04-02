@@ -2,9 +2,8 @@
 
 ## Completed
 
-- Replace the previous project with a simple REST API scope
-- Define the `items` API contract
-- Implement Express CRUD routes, validation, error handling, and logging
+- Replace the previous project with an auth service scope
+- Implement register, login, JWT auth, password hashing, and role-based access
 - Add unit, integration, e2e, and smoke tests
 - Add Docker, Makefile, and CI workflow
 - Complete local validation, Docker validation, and dependency audit

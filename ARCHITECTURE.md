@@ -4,23 +4,26 @@
 
 - `src/app.js`: Express app composition
 - `src/server.js`: HTTP server entrypoint
-- `src/items/router.js`: CRUD routes
-- `src/items/store.js`: in-memory item storage
-- `src/items/validators.js`: request validation
-- `src/middleware/logger.js`: request logging middleware
-- `src/middleware/errors.js`: not-found and error middleware
+- `src/auth/router.js`: register, login, and current-user routes
+- `src/auth/store.js`: in-memory user storage
+- `src/auth/password.js`: password hashing and verification
+- `src/auth/tokens.js`: JWT issuing and verification
+- `src/middleware/auth.js`: authentication and role checks
+- `src/middleware/errors.js`: JSON error handling
+- `src/middleware/logger.js`: request logging
 
 ## Runtime
 
-- The app exposes a single `items` resource.
-- Storage is process-local memory because no database was required.
-- Validation accepts only the required payload field: `name`.
-- Errors are returned as JSON with HTTP status codes.
-- Each request is logged with method, path, status code, and duration.
+- Users are stored in process memory because no database was required.
+- Registration creates `user` accounts only.
+- An admin account is seeded from environment variables at startup.
+- Passwords are hashed with Node core `scrypt`.
+- JWT bearer tokens carry `sub` and `role`.
+- `/admin` is restricted to the `admin` role.
 
 ## Test Layers
 
-- Unit: validators, store, logger, and error middleware
-- Integration: app behavior through Express without opening a network port
+- Unit: password hashing, token handling, store, validators, and middleware
+- Integration: full app flows through Express
 - E2E: spawned server process over real HTTP
-- Smoke: startup plus a minimal real request
+- Smoke: startup plus minimal authenticated-surface readiness

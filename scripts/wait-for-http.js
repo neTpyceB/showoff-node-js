@@ -7,14 +7,11 @@ if (!url) {
   process.exit(1);
 }
 
-for (let attempt = 1; attempt <= attempts; attempt += 1) {
+for (let attempt = 0; attempt < attempts; attempt += 1) {
   try {
-    const response = await fetch(url);
-
-    if (response.ok) {
-      process.stdout.write(`Ready: ${url}\n`);
-      process.exit(0);
-    }
+    await fetch(url);
+    process.stdout.write(`Ready: ${url}\n`);
+    process.exit(0);
   } catch {}
 
   await new Promise((resolve) => setTimeout(resolve, delayMs));

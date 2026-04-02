@@ -23,6 +23,6 @@ jobs:
       - run: docker compose build
       - run: docker compose run --rm test
       - run: docker compose up -d --wait api
-      - run: node scripts/wait-for-http.js http://localhost:3000/items 30 1000
-      - run: curl --fail http://localhost:3000/items
+      - run: node scripts/wait-for-http.js http://localhost:3000/auth/me 30 1000
+      - run: API_URL=http://localhost:3000 ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=admin-password node scripts/smoke-auth.js
       - run: docker compose down --remove-orphans

@@ -2,12 +2,14 @@
 
 ## Current Position
 
-- HTTP surface limited to the documented `items` endpoints
-- Validation rejects invalid item ids and invalid item names
-- Error responses are JSON and do not expose stack traces
+- Passwords are stored only as salted `scrypt` hashes
+- JWT bearer tokens are required for protected routes
+- Role checks gate `/admin`
+- Error responses do not expose stack traces
 
 ## Verification
 
 - `npm audit --audit-level=low`
 - Docker build validation
 - Containerized check run
+- Real auth flow over Dockerized HTTP

@@ -2,17 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLoggerMiddleware } from '../../src/middleware/logger.js';
 
-test('logger middleware records completed requests', () => {
-  const entries = [];
+test('logger middleware writes a log line on finish', () => {
+  const lines = [];
   let finish;
-  const middleware = createLoggerMiddleware({
-    info(entry, message) {
-      entries.push({ entry, message });
-    }
+  const middleware = createLoggerMiddleware((line) => {
+    lines.push(line);
   });
 
   middleware(
-    { method: 'GET', originalUrl: '/items' },
+    { method: 'GET', originalUrl: '/auth/me' },
     {
       statusCode: 200,
       on(event, callback) {
@@ -26,10 +24,10 @@ test('logger middleware records completed requests', () => {
 
   finish();
 
-  assert.equal(entries.length, 1);
-  assert.equal(entries[0].message, 'request completed');
-  assert.equal(entries[0].entry.method, 'GET');
-  assert.equal(entries[0].entry.path, '/items');
-  assert.equal(entries[0].entry.statusCode, 200);
-  assert.equal(typeof entries[0].entry.durationMs, 'number');
+  const payload = JSON.parse(lines[0]);
+
+  assert.equal(payload.method, 'GET');
+  assert.equal(payload.path, '/auth/me');
+  assert.equal(payload.statusCode, 200);
+  assert.equal(typeof payload.durationMs, 'number');
 });

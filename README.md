@@ -1,21 +1,21 @@
-# Simple REST API
+# Auth Service
 
-Minimal Express.js CRUD backend built to practice clean API structure and middleware usage.
-
-Storage is in-memory and scoped to the running process.
+Minimal Express.js auth backend built to practice authentication and authorization fundamentals.
 
 ## Scope
 
-- CRUD endpoints for `items`
-- Request validation
-- Error handling
-- Basic request logging
+- Register
+- Login
+- JWT authentication
+- Password hashing
+- Role-based access
 
 ## Stack
 
 - Node.js `24.14.1` Active LTS
 - Express `5.2.1`
-- Pino `10.3.1`
+- jsonwebtoken `9.0.3`
+- Core crypto: `randomBytes`, `scryptSync`, `timingSafeEqual`
 - ESLint `10.1.0`
 - c8 `11.0.0`
 - Supertest `7.2.2`
@@ -23,36 +23,42 @@ Storage is in-memory and scoped to the running process.
 
 ## API
 
-- `GET /items`
-- `GET /items/:id`
-- `POST /items`
-- `PUT /items/:id`
-- `DELETE /items/:id`
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/me`
+- `GET /admin`
 
-Request body for create and update:
-
-```json
-{
-  "name": "Item name"
-}
-```
-
-Successful item shape:
+Register and login request body:
 
 ```json
 {
-  "id": 1,
-  "name": "Item name"
+  "email": "user@example.com",
+  "password": "password123"
 }
 ```
 
-Error response shape:
+Authenticated user response:
 
 ```json
 {
-  "error": "Message"
+  "id": 2,
+  "email": "user@example.com",
+  "role": "user"
 }
 ```
+
+Login response:
+
+```json
+{
+  "token": "jwt"
+}
+```
+
+The Docker runtime seeds one admin account:
+
+- email: `admin@example.com`
+- password: `admin-password`
 
 ## Local Run
 
@@ -72,12 +78,11 @@ make docker-test
 make docker-down
 ```
 
+`make check` runs lint, coverage, and `npm audit` on the host. `make docker-test` runs the containerized lint and coverage path.
+
 ## Example Requests
 
 ```bash
-curl http://localhost:3000/items
-curl -X POST http://localhost:3000/items -H 'Content-Type: application/json' -d '{"name":"first"}'
-curl http://localhost:3000/items/1
-curl -X PUT http://localhost:3000/items/1 -H 'Content-Type: application/json' -d '{"name":"updated"}'
-curl -X DELETE http://localhost:3000/items/1
+curl -X POST http://localhost:3000/auth/register -H 'Content-Type: application/json' -d '{"email":"user@example.com","password":"password123"}'
+curl -X POST http://localhost:3000/auth/login -H 'Content-Type: application/json' -d '{"email":"user@example.com","password":"password123"}'
 ```

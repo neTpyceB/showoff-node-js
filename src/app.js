@@ -1,19 +1,39 @@
 import express from 'express';
-import pino from 'pino';
-import { createItemsRouter } from './items/router.js';
+import { createAuthRouter } from './auth/router.js';
+import { hashPassword } from './auth/password.js';
+import { createUserStore } from './auth/store.js';
+import { createAuthMiddleware, requireRole } from './middleware/auth.js';
 import { createErrorHandler, notFound } from './middleware/errors.js';
 import { createLoggerMiddleware } from './middleware/logger.js';
-import { createItemStore } from './items/store.js';
 
-export function createApp({ logger = pino({ enabled: process.env.NODE_ENV !== 'test' }) } = {}) {
+export function createApp({
+  adminEmail,
+  adminPassword,
+  jwtSecret,
+  log = process.stdout.write.bind(process.stdout)
+}) {
   const app = express();
-  const store = createItemStore();
+  const store = createUserStore();
 
-  app.use(createLoggerMiddleware(logger));
+  store.create({
+    email: adminEmail,
+    passwordHash: hashPassword(adminPassword),
+    role: 'admin'
+  });
+
+  app.use(createLoggerMiddleware(log));
   app.use(express.json());
-  app.use('/items', createItemsRouter(store));
+  app.use(
+    '/auth',
+    createAuthRouter({
+      store,
+      jwtSecret,
+      requireAuth: createAuthMiddleware({ store, jwtSecret }),
+      requireRole
+    })
+  );
   app.use(notFound);
-  app.use(createErrorHandler(logger));
+  app.use(createErrorHandler());
 
   return app;
 }
