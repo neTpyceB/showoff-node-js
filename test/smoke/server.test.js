@@ -2,10 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 
+async function stopServer(server) {
+  if (server.exitCode !== null || server.signalCode !== null) {
+    return;
+  }
+
+  await new Promise((resolve) => {
+    server.once('close', resolve);
+    server.kill('SIGTERM');
+  });
+}
+
 async function waitForServer(url) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          Connection: 'close'
+        }
+      });
 
       if (response.status === 401) {
         return response;
@@ -19,7 +34,7 @@ async function waitForServer(url) {
 }
 
 test('server starts and responds on the auth surface', async () => {
-  const port = 3101;
+  const port = 4100 + Math.floor(Math.random() * 1000);
   const server = spawn(process.execPath, ['src/server.js'], {
     cwd: process.cwd(),
     env: {
@@ -28,7 +43,8 @@ test('server starts and responds on the auth surface', async () => {
       JWT_SECRET: 'secret',
       ADMIN_EMAIL: 'admin@example.com',
       ADMIN_PASSWORD: 'admin-password'
-    }
+    },
+    stdio: 'ignore'
   });
 
   try {
@@ -37,9 +53,6 @@ test('server starts and responds on the auth surface', async () => {
     assert.equal(response.status, 401);
     assert.deepEqual(await response.json(), { error: 'Authentication required' });
   } finally {
-    server.kill('SIGTERM');
-    await new Promise((resolve) => {
-      server.on('close', resolve);
-    });
+    await stopServer(server);
   }
 });

@@ -2,10 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 
+async function stopServer(server) {
+  if (server.exitCode !== null || server.signalCode !== null) {
+    return;
+  }
+
+  await new Promise((resolve) => {
+    server.once('close', resolve);
+    server.kill('SIGTERM');
+  });
+}
+
 async function waitForServer(url) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     try {
-      await fetch(url);
+      await fetch(url, {
+        headers: {
+          Connection: 'close'
+        }
+      });
       return;
     } catch {}
 
@@ -16,7 +31,13 @@ async function waitForServer(url) {
 }
 
 async function request(baseUrl, path, options = {}) {
-  const response = await fetch(`${baseUrl}${path}`, options);
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
+    headers: {
+      Connection: 'close',
+      ...(options.headers ?? {})
+    }
+  });
   const text = await response.text();
 
   return {
@@ -26,8 +47,9 @@ async function request(baseUrl, path, options = {}) {
 }
 
 test('server supports the auth flow over real HTTP', async () => {
-  const port = 3100;
+  const port = 3100 + Math.floor(Math.random() * 1000);
   const baseUrl = `http://127.0.0.1:${port}`;
+  const userEmail = `user-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
   const server = spawn(process.execPath, ['src/server.js'], {
     cwd: process.cwd(),
     env: {
@@ -36,7 +58,8 @@ test('server supports the auth flow over real HTTP', async () => {
       JWT_SECRET: 'secret',
       ADMIN_EMAIL: 'admin@example.com',
       ADMIN_PASSWORD: 'admin-password'
-    }
+    },
+    stdio: 'ignore'
   });
 
   try {
@@ -45,20 +68,20 @@ test('server supports the auth flow over real HTTP', async () => {
     let response = await request(baseUrl, '/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'user@example.com', password: 'password123' })
+      body: JSON.stringify({ email: userEmail, password: 'password123' })
     });
 
     assert.equal(response.status, 201);
     assert.deepEqual(response.body, {
       id: 2,
-      email: 'user@example.com',
+      email: userEmail,
       role: 'user'
     });
 
     response = await request(baseUrl, '/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'user@example.com', password: 'password123' })
+      body: JSON.stringify({ email: userEmail, password: 'password123' })
     });
 
     assert.equal(response.status, 200);
@@ -90,9 +113,6 @@ test('server supports the auth flow over real HTTP', async () => {
     assert.equal(response.status, 200);
     assert.deepEqual(response.body, { access: 'granted' });
   } finally {
-    server.kill('SIGTERM');
-    await new Promise((resolve) => {
-      server.on('close', resolve);
-    });
+    await stopServer(server);
   }
 });
