@@ -1,105 +1,201 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHandler } from '../../src/app.js';
-import { request, startServer } from '../helpers/http.js';
+import WebSocket from 'ws';
+import { startServer } from '../helpers/server.js';
+import { connectClient, waitForClose } from '../helpers/ws.js';
 
-test('csv-to-ndjson endpoint transforms streamed csv input', async () => {
-  const server = await startServer(createHandler());
+test('chat server broadcasts messages and tracks presence inside a room', async () => {
+  const server = await startServer();
+  const room = 'general';
+  const alice = await connectClient(server.url, room, 'alice');
 
   try {
-    const response = await request(server.url, '/transform/csv-to-ndjson', {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/csv' },
-      body: 'name,score\nalice,10\nbob,20\n'
+    assert.deepEqual(await alice.nextEvent(), {
+      type: 'history',
+      room,
+      messages: []
+    });
+    assert.deepEqual(await alice.nextEvent(), {
+      type: 'presence',
+      room,
+      users: ['alice']
     });
 
-    assert.equal(response.status, 200);
-    assert.equal(response.body, '{"name":"alice","score":"10"}\n{"name":"bob","score":"20"}\n');
+    const bob = await connectClient(server.url, room, 'bob');
+
+    try {
+      assert.deepEqual(await bob.nextEvent(), {
+        type: 'history',
+        room,
+        messages: []
+      });
+      assert.deepEqual(await bob.nextEvent(), {
+        type: 'presence',
+        room,
+        users: ['alice', 'bob']
+      });
+      assert.deepEqual(await alice.nextEvent(), {
+        type: 'presence',
+        room,
+        users: ['alice', 'bob']
+      });
+
+      alice.socket.send(JSON.stringify({ type: 'message', body: 'hello' }));
+
+      const aliceMessage = await alice.nextEvent();
+      const bobMessage = await bob.nextEvent();
+
+      assert.equal(aliceMessage.type, 'message');
+      assert.equal(aliceMessage.room, room);
+      assert.equal(aliceMessage.user, 'alice');
+      assert.equal(aliceMessage.body, 'hello');
+      assert.match(aliceMessage.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+      assert.deepEqual(bobMessage, aliceMessage);
+
+      await bob.close();
+
+      assert.deepEqual(await alice.nextEvent(), {
+        type: 'presence',
+        room,
+        users: ['alice']
+      });
+    } finally {
+      if (bob.socket.readyState !== WebSocket.CLOSED) {
+        await bob.close();
+      }
+    }
   } finally {
+    if (alice.socket.readyState !== WebSocket.CLOSED) {
+      await alice.close();
+    }
+
     await server.close();
   }
 });
 
-test('json-to-csv endpoint transforms streamed json input', async () => {
-  const server = await startServer(createHandler());
+test('chat server persists room messages and keeps rooms isolated', async () => {
+  const server = await startServer();
+  const alice = await connectClient(server.url, 'general', 'alice');
 
   try {
-    const response = await request(server.url, '/transform/json-to-csv', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '[{"name":"alice","score":10},{"name":"bob","score":20}]'
-    });
+    await alice.nextEvent();
+    await alice.nextEvent();
+    alice.socket.send(JSON.stringify({ type: 'message', body: 'saved' }));
 
-    assert.equal(response.status, 200);
-    assert.equal(response.body, 'name,score\nalice,10\nbob,20\n');
+    const savedMessage = await alice.nextEvent();
+
+    await alice.close();
+
+    const replay = await connectClient(server.url, 'general', 'replay');
+
+    try {
+      const history = await replay.nextEvent();
+
+      assert.equal(history.type, 'history');
+      assert.equal(history.room, 'general');
+      assert.deepEqual(history.messages, [
+        {
+          room: 'general',
+          user: 'alice',
+          body: 'saved',
+          createdAt: savedMessage.createdAt
+        }
+      ]);
+      assert.deepEqual(await replay.nextEvent(), {
+        type: 'presence',
+        room: 'general',
+        users: ['replay']
+      });
+    } finally {
+      await replay.close();
+    }
+
+    const otherRoom = await connectClient(server.url, 'other', 'bob');
+
+    try {
+      assert.deepEqual(await otherRoom.nextEvent(), {
+        type: 'history',
+        room: 'other',
+        messages: []
+      });
+      assert.deepEqual(await otherRoom.nextEvent(), {
+        type: 'presence',
+        room: 'other',
+        users: ['bob']
+      });
+    } finally {
+      await otherRoom.close();
+    }
   } finally {
+    if (alice.socket.readyState !== WebSocket.CLOSED) {
+      await alice.close();
+    }
+
     await server.close();
   }
 });
 
-test('csv-to-ndjson returns an empty successful response when only headers are provided', async () => {
-  const server = await startServer(createHandler());
+test('chat server closes invalid websocket sessions and plain http requires upgrade', async () => {
+  const server = await startServer();
 
   try {
-    const response = await request(server.url, '/transform/csv-to-ndjson', {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/csv' },
-      body: 'name,score\n'
+    const response = await fetch(server.url);
+
+    assert.equal(response.status, 426);
+    assert.equal(await response.text(), '{"error":"WebSocket upgrade required"}');
+
+    const missing = new WebSocket(`${server.url.replace(/^http/, 'ws')}/chat?user=alice`);
+    const missingClosed = waitForClose(missing);
+
+    await new Promise((resolve, reject) => {
+      missing.once('open', resolve);
+      missing.once('error', reject);
     });
 
-    assert.equal(response.status, 200);
-    assert.equal(response.body, '');
-  } finally {
-    await server.close();
-  }
-});
-
-test('service returns json errors for invalid input and missing routes', async () => {
-  const server = await startServer(createHandler());
-
-  try {
-    let response = await request(server.url, '/transform/csv-to-ndjson', {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/csv' },
-      body: 'name,score\nalice\n'
+    assert.deepEqual(await missingClosed, {
+      code: 1008,
+      reason: 'room_and_user_required'
     });
 
-    assert.equal(response.status, 400);
-    assert.equal(response.body, '{"error":"Invalid CSV"}');
+    const invalid = await connectClient(server.url, 'general', 'alice');
 
-    response = await request(server.url, '/transform/json-to-csv', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{"name":"alice"}'
-    });
+    try {
+      await invalid.nextEvent();
+      await invalid.nextEvent();
 
-    assert.equal(response.status, 400);
-    assert.equal(response.body, '{"error":"Invalid JSON"}');
+      const closed = waitForClose(invalid.socket);
 
-    response = await request(server.url, '/missing', {
-      method: 'POST',
-      body: ''
-    });
+      invalid.socket.send('not-json');
 
-    assert.equal(response.status, 404);
-    assert.equal(response.body, '{"error":"Route not found"}');
-  } finally {
-    await server.close();
-  }
-});
+      assert.deepEqual(await closed, {
+        code: 1003,
+        reason: 'invalid_json'
+      });
+    } finally {
+      if (invalid.socket.readyState !== WebSocket.CLOSED) {
+        await invalid.close();
+      }
+    }
 
-test('service stops exporting when a stream fails after output has started', async () => {
-  const server = await startServer(createHandler());
+    const wrongShape = await connectClient(server.url, 'general', 'bob');
 
-  try {
-    const response = await request(server.url, '/transform/csv-to-ndjson', {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/csv' },
-      body: 'name,score\nalice,10\nbob\n'
-    });
+    try {
+      await wrongShape.nextEvent();
+      await wrongShape.nextEvent();
 
-    assert.equal(response.status, 200);
-    assert.equal(response.body, '{"name":"alice","score":"10"}\n');
+      const closed = waitForClose(wrongShape.socket);
+
+      wrongShape.socket.send(JSON.stringify({ type: 'presence' }));
+
+      assert.deepEqual(await closed, {
+        code: 1003,
+        reason: 'invalid_message'
+      });
+    } finally {
+      if (wrongShape.socket.readyState !== WebSocket.CLOSED) {
+        await wrongShape.close();
+      }
+    }
   } finally {
     await server.close();
   }

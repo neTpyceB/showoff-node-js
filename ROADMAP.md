@@ -2,15 +2,16 @@
 
 ## Completed
 
-- Replace the previous project with a data processing service scope
-- Implement streamed CSV and JSON transforms with streamed exports
+- Replace the previous project with a realtime chat backend scope
+- Implement room join, message broadcast, presence updates, and SQLite persistence
+- Add SQLite migration support
 - Add unit, integration, e2e, and smoke tests
 - Add Docker, Makefile, and CI workflow
 - Complete local validation, Docker validation, and dependency audit
 
 ## Current
 
-- Repository matches the current streaming service scope
+- Repository matches the current realtime chat scope
 
 ## Next
 

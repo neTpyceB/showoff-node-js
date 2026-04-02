@@ -2,7 +2,7 @@
 
 ## Dependencies
 
-- Runtime dependencies: `csv-parse@6.2.1`, `csv-stringify@6.7.0`, `stream-json@2.1.0`
+- Runtime dependencies: `ws@8.20.0`, `better-sqlite3@12.8.0`
 - Dev dependencies: `eslint@10.1.0`, `c8@11.0.0`
 
 ## Result

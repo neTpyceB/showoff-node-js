@@ -1,58 +1,106 @@
+import assert from 'node:assert/strict';
+import { assertMessage, connectClient } from './ws-client.js';
+
 const baseUrl = process.env.API_URL ?? 'http://localhost:3000';
-const attempts = Number.parseInt(process.env.ATTEMPTS ?? '30', 10);
+const room = `smoke-${Date.now()}`;
+const alice = await connectClient(baseUrl, room, 'alice');
 
-async function csvRequest() {
-  const response = await fetch(`${baseUrl}/transform/csv-to-ndjson`, {
-    method: 'POST',
-    headers: {
-      Connection: 'close',
-      'Content-Type': 'text/csv'
-    },
-    body: 'name,score\nalice,10\nbob,20\n'
+try {
+  assert.deepEqual(await alice.nextEvent(), {
+    type: 'history',
+    room,
+    messages: []
+  });
+  assert.deepEqual(await alice.nextEvent(), {
+    type: 'presence',
+    room,
+    users: ['alice']
   });
 
-  return {
-    body: await response.text(),
-    ok: response.ok
-  };
-}
+  const bob = await connectClient(baseUrl, room, 'bob');
 
-async function jsonRequest() {
-  const response = await fetch(`${baseUrl}/transform/json-to-csv`, {
-    method: 'POST',
-    headers: {
-      Connection: 'close',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify([
-      { name: 'alice', score: 10 },
-      { name: 'bob', score: 20 }
-    ])
-  });
-
-  return {
-    body: await response.text(),
-    ok: response.ok
-  };
-}
-
-for (let attempt = 0; attempt < attempts; attempt += 1) {
   try {
-    const csv = await csvRequest();
-    const json = await jsonRequest();
+    assert.deepEqual(await bob.nextEvent(), {
+      type: 'history',
+      room,
+      messages: []
+    });
+    assert.deepEqual(await bob.nextEvent(), {
+      type: 'presence',
+      room,
+      users: ['alice', 'bob']
+    });
+    assert.deepEqual(await alice.nextEvent(), {
+      type: 'presence',
+      room,
+      users: ['alice', 'bob']
+    });
 
-    if (
-      csv.ok &&
-      json.ok &&
-      csv.body === '{"name":"alice","score":"10"}\n{"name":"bob","score":"20"}\n' &&
-      json.body === 'name,score\nalice,10\nbob,20\n'
-    ) {
-      process.stdout.write('Streaming smoke passed\n');
-      process.exit(0);
-    }
-  } catch {}
+    alice.socket.send(JSON.stringify({ type: 'message', body: 'hello' }));
 
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+    assertMessage(await alice.nextEvent(), {
+      type: 'message',
+      room,
+      user: 'alice',
+      body: 'hello'
+    });
+    assertMessage(await bob.nextEvent(), {
+      type: 'message',
+      room,
+      user: 'alice',
+      body: 'hello'
+    });
+
+    await alice.close();
+
+    assert.deepEqual(await bob.nextEvent(), {
+      type: 'presence',
+      room,
+      users: ['bob']
+    });
+  } finally {
+    await bob.close();
+  }
+} finally {
+  if (alice.socket.readyState !== alice.socket.CLOSED) {
+    await alice.close();
+  }
 }
 
-process.exit(1);
+const replay = await connectClient(baseUrl, room, 'replay');
+
+try {
+  const history = await replay.nextEvent();
+
+  assert.equal(history.type, 'history');
+  assert.equal(history.room, room);
+  assert.equal(history.messages.length, 1);
+  assert.deepEqual(
+    {
+      room: history.messages[0].room,
+      user: history.messages[0].user,
+      body: history.messages[0].body
+    },
+    {
+      room,
+      user: 'alice',
+      body: 'hello'
+    }
+  );
+  assert.match(history.messages[0].createdAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.deepEqual(await replay.nextEvent(), {
+    type: 'presence',
+      room,
+      users: ['replay']
+    }
+  );
+} catch (error) {
+  if (replay.socket.readyState !== replay.socket.CLOSED) {
+    await replay.close();
+  }
+
+  throw error;
+}
+
+await replay.close();
+process.stdout.write('Realtime smoke passed\n');

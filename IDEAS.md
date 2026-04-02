@@ -2,8 +2,8 @@
 
 Not implemented.
 
-- Additional export formats
-- File-based job storage
-- Compression pipelines
+- Authenticated users
+- Private rooms
+- Delivery acknowledgements
 
 These remain outside the current scope until explicitly required.

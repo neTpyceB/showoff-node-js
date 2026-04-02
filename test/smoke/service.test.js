@@ -1,20 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { request } from '../helpers/http.js';
+import WebSocket from 'ws';
+import { connectClient } from '../helpers/ws.js';
 
 async function waitForServer(baseUrl) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     try {
-      const response = await request(baseUrl, '/transform/csv-to-ndjson', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/csv' },
-        body: 'name\nalice\n'
-      });
-
-      if (response.status === 200) {
-        return response;
-      }
+      const socket = await connectClient(baseUrl, `smoke-ready-${attempt}`, 'probe');
+      await socket.close();
+      return;
     } catch {}
 
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -34,24 +32,44 @@ async function stopServer(server) {
   });
 }
 
-test('server starts and processes a minimal csv stream', async () => {
+test('server starts and persists a minimal chat message', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'chat-smoke-'));
+  const databasePath = join(directory, 'chat.sqlite');
   const port = 4100 + Math.floor(Math.random() * 1000);
   const baseUrl = `http://127.0.0.1:${port}`;
   const server = spawn(process.execPath, ['src/server.js'], {
     cwd: process.cwd(),
     env: {
       ...process.env,
+      DATABASE_PATH: databasePath,
       PORT: String(port)
     },
     stdio: 'ignore'
   });
 
   try {
-    const response = await waitForServer(baseUrl);
+    await waitForServer(baseUrl);
 
-    assert.equal(response.status, 200);
-    assert.equal(response.body, '{"name":"alice"}\n');
+    const alice = await connectClient(baseUrl, 'smoke', 'alice');
+
+    try {
+      await alice.nextEvent();
+      await alice.nextEvent();
+      alice.socket.send(JSON.stringify({ type: 'message', body: 'hello' }));
+
+      const message = await alice.nextEvent();
+
+      assert.equal(message.type, 'message');
+      assert.equal(message.room, 'smoke');
+      assert.equal(message.user, 'alice');
+      assert.equal(message.body, 'hello');
+    } finally {
+      if (alice.socket.readyState !== WebSocket.CLOSED) {
+        await alice.close();
+      }
+    }
   } finally {
     await stopServer(server);
+    await rm(directory, { force: true, recursive: true });
   }
 });
