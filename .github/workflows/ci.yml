@@ -23,5 +23,5 @@ jobs:
       - run: docker compose build api test
       - run: docker compose run --rm test
       - run: docker compose up -d --wait api
-      - run: API_URL=http://localhost:3000 node scripts/request-smoke.js
+      - run: docker compose exec -T api node scripts/request-smoke.js
       - run: docker compose down --remove-orphans
