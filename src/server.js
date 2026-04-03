@@ -1,39 +1,27 @@
-import { pathToFileURL } from 'node:url';
-import { createApp } from './app.js';
+import { createServer } from 'node:http';
+import { createHandler } from './app.js';
+import { readPort, readQueueName, readRedisUrl } from './config.js';
+import { createQueueRuntime } from './runtime.js';
 
-export function readPort(env = process.env) {
-  return Number.parseInt(env.PORT ?? '3000', 10);
+const runtime = createQueueRuntime({
+  queueName: readQueueName(),
+  redisUrl: readRedisUrl()
+});
+const server = createServer(createHandler(runtime.jobService));
+
+server.listen(readPort(), () => {
+  process.stdout.write(`Listening on ${readPort()}\n`);
+});
+
+async function shutdown() {
+  await new Promise((resolve) => server.close(resolve));
+  await runtime.close();
+  process.exit(0);
 }
 
-export function readDatabasePath(env = process.env) {
-  return env.DATABASE_PATH ?? 'tmp/chat.sqlite';
-}
-
-export function shutdownApp(app, exit, exitCode) {
-  return app.close().then(
-    () => exit(exitCode),
-    () => exit(1)
-  );
-}
-
-export function startServer(env = process.env) {
-  const port = readPort(env);
-  const app = createApp({ databasePath: readDatabasePath(env) });
-
-  app.server.listen(port, () => {
-    process.stdout.write(`Listening on ${port}\n`);
-  });
-
-  process.on('SIGINT', () => {
-    void shutdownApp(app, process.exit, 0);
-  });
-  process.on('SIGTERM', () => {
-    void shutdownApp(app, process.exit, 0);
-  });
-
-  return app;
-}
-
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  startServer();
-}
+process.on('SIGINT', () => {
+  void shutdown();
+});
+process.on('SIGTERM', () => {
+  void shutdown();
+});

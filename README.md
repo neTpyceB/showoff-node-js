@@ -1,73 +1,70 @@
-# Realtime Chat Backend
+# Job Queue System
 
-Minimal WebSocket chat backend with rooms, message broadcasting, presence tracking, and SQLite message persistence.
+Minimal Redis-backed async job system with delayed jobs, retries, and a separate worker process.
 
 ## Scope
 
-- Rooms through the WebSocket query string
-- Message broadcasting inside a room
-- Presence updates on join and leave
-- Persisted room history on reconnect
+- Enqueue background jobs over HTTP
+- Read job state over HTTP
+- Process jobs in a separate worker process
+- Delay job execution
+- Retry failed jobs until they succeed or exhaust attempts
 
 ## Stack
 
 - Node.js `24.14.1` Active LTS
 - Core modules: `http`
-- ws `8.20.0`
-- better-sqlite3 `12.8.0`
+- bullmq `5.73.0`
+- ioredis `5.10.1`
+- Redis `8.6.2-alpine`
 - ESLint `10.1.0`
 - c8 `11.0.0`
 - Docker Compose
 
-## Protocol
+## API
 
-- WebSocket route: `ws://localhost:3000/chat?room=<room>&user=<user>`
-- Inbound event:
+- `POST /jobs`
+- `GET /jobs/:id`
 
-```json
-{ "type": "message", "body": "hello" }
-```
-
-- Outbound history event:
+`POST /jobs`
 
 ```json
 {
-  "type": "history",
-  "room": "general",
-  "messages": [
-    {
-      "room": "general",
-      "user": "alice",
-      "body": "hello",
-      "createdAt": "2026-04-02T12:00:00.000Z"
-    }
-  ]
+  "value": "hello",
+  "delayMs": 400,
+  "failUntilAttempt": 1
 }
 ```
 
-- Outbound presence event:
+Response:
 
 ```json
 {
-  "type": "presence",
-  "room": "general",
-  "users": ["alice", "bob"]
+  "id": "1"
 }
 ```
 
-- Outbound message event:
+`GET /jobs/:id`
 
 ```json
 {
-  "type": "message",
-  "room": "general",
-  "user": "alice",
-  "body": "hello",
-  "createdAt": "2026-04-02T12:00:00.000Z"
+  "id": "1",
+  "state": "completed",
+  "attemptsMade": 1,
+  "result": {
+    "output": "HELLO"
+  },
+  "failedReason": null
 }
 ```
 
-Plain HTTP requests return `426` with `{"error":"WebSocket upgrade required"}`.
+Errors are returned as JSON:
+
+```json
+{
+  "error": "Message"
+}
+```
 
 ## Local Run
 
@@ -75,7 +72,7 @@ Plain HTTP requests return `426` with `{"error":"WebSocket upgrade required"}`.
 docker compose up --build
 ```
 
-The backend listens on [http://localhost:3000](http://localhost:3000) for HTTP upgrade and [ws://localhost:3000/chat](ws://localhost:3000/chat) for chat clients.
+The API listens on [http://localhost:3000](http://localhost:3000).
 
 ## Validation
 
@@ -87,4 +84,4 @@ make docker-test
 make docker-down
 ```
 
-`make check` runs migrations, lint, 100% coverage, and `npm audit`. `make docker-test` runs the containerized migration, lint, and coverage path.
+`make check` runs the migration step, lint, 100% coverage, and `npm audit`. `make docker-test` runs the containerized migration, lint, and coverage path.

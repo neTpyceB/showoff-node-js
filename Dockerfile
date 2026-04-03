@@ -12,8 +12,7 @@ FROM mirror.gcr.io/library/node:24.14.1-alpine3.22 AS runtime
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
-COPY migrations ./migrations
 COPY src ./src
 COPY scripts ./scripts
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["node", "src/server.js"]

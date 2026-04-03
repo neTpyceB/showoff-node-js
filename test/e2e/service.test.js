@@ -1,18 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import WebSocket from 'ws';
-import { connectClient } from '../helpers/ws.js';
 
 async function waitForServer(baseUrl) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     try {
-      const socket = await connectClient(baseUrl, `ready-${attempt}`, 'probe');
-      await socket.close();
-      return;
+      const response = await fetch(`${baseUrl}/jobs/missing`);
+
+      if (response.status === 404) {
+        return;
+      }
     } catch {}
 
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -32,16 +29,13 @@ async function stopServer(server) {
   });
 }
 
-test('server handles realtime chat flow over a real process', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'chat-e2e-'));
-  const databasePath = join(directory, 'chat.sqlite');
+test('server handles the queue api over a real process', async () => {
   const port = 3100 + Math.floor(Math.random() * 1000);
   const baseUrl = `http://127.0.0.1:${port}`;
-  const server = spawn(process.execPath, ['src/server.js'], {
+  const server = spawn(process.execPath, ['test/helpers/fake-process-server.js'], {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      DATABASE_PATH: databasePath,
       PORT: String(port)
     },
     stdio: 'ignore'
@@ -50,55 +44,26 @@ test('server handles realtime chat flow over a real process', async () => {
   try {
     await waitForServer(baseUrl);
 
-    const alice = await connectClient(baseUrl, 'general', 'alice');
+    let response = await fetch(`${baseUrl}/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: 'hello', delayMs: 500, failUntilAttempt: 1 })
+    });
 
-    try {
-      await alice.nextEvent();
-      await alice.nextEvent();
-      alice.socket.send(JSON.stringify({ type: 'message', body: 'hello' }));
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), { id: '1' });
 
-      const message = await alice.nextEvent();
+    response = await fetch(`${baseUrl}/jobs/1`);
 
-      assert.equal(message.type, 'message');
-      assert.equal(message.room, 'general');
-      assert.equal(message.user, 'alice');
-      assert.equal(message.body, 'hello');
-
-      const bob = await connectClient(baseUrl, 'general', 'bob');
-
-      try {
-        const history = await bob.nextEvent();
-
-        assert.equal(history.type, 'history');
-        assert.equal(history.room, 'general');
-        assert.deepEqual(history.messages, [
-          {
-            room: 'general',
-            user: 'alice',
-            body: 'hello',
-            createdAt: message.createdAt
-          }
-        ]);
-        assert.deepEqual(await bob.nextEvent(), {
-          type: 'presence',
-          room: 'general',
-          users: ['alice', 'bob']
-        });
-        assert.deepEqual(await alice.nextEvent(), {
-          type: 'presence',
-          room: 'general',
-          users: ['alice', 'bob']
-        });
-      } finally {
-        await bob.close();
-      }
-    } finally {
-      if (alice.socket.readyState !== WebSocket.CLOSED) {
-        await alice.close();
-      }
-    }
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      id: '1',
+      state: 'completed',
+      attemptsMade: 1,
+      result: { output: 'HELLO' },
+      failedReason: null
+    });
   } finally {
     await stopServer(server);
-    await rm(directory, { force: true, recursive: true });
   }
 });

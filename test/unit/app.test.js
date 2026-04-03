@@ -1,27 +1,96 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { createApp } from '../../src/app.js';
+import { createHandler } from '../../src/app.js';
+import { request, startServer } from '../helpers/http.js';
 
-test('http requests receive upgrade required', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'chat-app-'));
-  const databasePath = join(directory, 'chat.sqlite');
-  const app = createApp({ databasePath });
+test('handler creates a job and returns its id', async () => {
+  const payloads = [];
+  const server = await startServer(
+    createHandler({
+      async enqueueJob(payload) {
+        payloads.push(payload);
+        return { id: '1' };
+      },
+      async getJob() {
+        return null;
+      }
+    })
+  );
 
   try {
-    await new Promise((resolve) => {
-      app.server.listen(0, '127.0.0.1', resolve);
+    const response = await request(server.url, '/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: 'hello', delayMs: 0, failUntilAttempt: 0 })
     });
 
-    const { port } = app.server.address();
-    const response = await fetch(`http://127.0.0.1:${port}`);
-
-    assert.equal(response.status, 426);
-    assert.equal(await response.text(), '{"error":"WebSocket upgrade required"}');
+    assert.equal(response.status, 201);
+    assert.equal(response.body, '{"id":"1"}');
+    assert.deepEqual(payloads, [{ value: 'hello', delayMs: 0, failUntilAttempt: 0 }]);
   } finally {
-    await app.close();
-    await rm(directory, { force: true, recursive: true });
+    await server.close();
+  }
+});
+
+test('handler returns job details, route not found, invalid json, and internal errors', async () => {
+  const server = await startServer(
+    createHandler({
+      async enqueueJob() {
+        throw new Error('boom');
+      },
+      async getJob(id) {
+        if (id === '1') {
+          return {
+            id: '1',
+            state: 'completed',
+            attemptsMade: 1,
+            result: { output: 'HELLO' },
+            failedReason: null
+          };
+        }
+
+        return null;
+      }
+    })
+  );
+
+  try {
+    let response = await request(server.url, '/jobs/1');
+
+    assert.equal(response.status, 200);
+    assert.equal(
+      response.body,
+      '{"id":"1","state":"completed","attemptsMade":1,"result":{"output":"HELLO"},"failedReason":null}'
+    );
+
+    response = await request(server.url, '/jobs/missing');
+
+    assert.equal(response.status, 404);
+    assert.equal(response.body, '{"error":"Job not found"}');
+
+    response = await request(server.url, '/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{'
+    });
+
+    assert.equal(response.status, 400);
+    assert.equal(response.body, '{"error":"Invalid JSON"}');
+
+    response = await request(server.url, '/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: 'hello', delayMs: 0, failUntilAttempt: 0 })
+    });
+
+    assert.equal(response.status, 500);
+    assert.equal(response.body, '{"error":"Internal server error"}');
+
+    response = await request(server.url, '/missing');
+
+    assert.equal(response.status, 404);
+    assert.equal(response.body, '{"error":"Route not found"}');
+  } finally {
+    await server.close();
   }
 });
