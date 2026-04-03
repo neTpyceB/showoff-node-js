@@ -1,201 +1,85 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import WebSocket from 'ws';
-import { startServer } from '../helpers/server.js';
-import { connectClient, waitForClose } from '../helpers/ws.js';
+import { createHandler } from '../../src/app.js';
+import { request, startServer } from '../helpers/http.js';
 
-test('chat server broadcasts messages and tracks presence inside a room', async () => {
-  const server = await startServer();
-  const room = 'general';
-  const alice = await connectClient(server.url, room, 'alice');
+test('api enqueues jobs and reads status over http', async () => {
+  const jobs = new Map();
+  let nextId = 0;
+  const server = await startServer(
+    createHandler({
+      async enqueueJob(payload) {
+        const id = String(++nextId);
+
+        jobs.set(id, {
+          id,
+          state: payload.delayMs > 0 ? 'delayed' : 'waiting',
+          attemptsMade: payload.failUntilAttempt,
+          result: { output: payload.value.toUpperCase() },
+          failedReason: null
+        });
+
+        return { id };
+      },
+      async getJob(id) {
+        return jobs.get(id) ?? null;
+      }
+    })
+  );
 
   try {
-    assert.deepEqual(await alice.nextEvent(), {
-      type: 'history',
-      room,
-      messages: []
-    });
-    assert.deepEqual(await alice.nextEvent(), {
-      type: 'presence',
-      room,
-      users: ['alice']
+    let response = await request(server.url, '/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: 'hello', delayMs: 250, failUntilAttempt: 1 })
     });
 
-    const bob = await connectClient(server.url, room, 'bob');
+    assert.equal(response.status, 201);
+    assert.equal(response.body, '{"id":"1"}');
 
-    try {
-      assert.deepEqual(await bob.nextEvent(), {
-        type: 'history',
-        room,
-        messages: []
-      });
-      assert.deepEqual(await bob.nextEvent(), {
-        type: 'presence',
-        room,
-        users: ['alice', 'bob']
-      });
-      assert.deepEqual(await alice.nextEvent(), {
-        type: 'presence',
-        room,
-        users: ['alice', 'bob']
-      });
+    response = await request(server.url, '/jobs/1');
 
-      alice.socket.send(JSON.stringify({ type: 'message', body: 'hello' }));
-
-      const aliceMessage = await alice.nextEvent();
-      const bobMessage = await bob.nextEvent();
-
-      assert.equal(aliceMessage.type, 'message');
-      assert.equal(aliceMessage.room, room);
-      assert.equal(aliceMessage.user, 'alice');
-      assert.equal(aliceMessage.body, 'hello');
-      assert.match(aliceMessage.createdAt, /^\d{4}-\d{2}-\d{2}T/);
-      assert.deepEqual(bobMessage, aliceMessage);
-
-      await bob.close();
-
-      assert.deepEqual(await alice.nextEvent(), {
-        type: 'presence',
-        room,
-        users: ['alice']
-      });
-    } finally {
-      if (bob.socket.readyState !== WebSocket.CLOSED) {
-        await bob.close();
-      }
-    }
+    assert.equal(response.status, 200);
+    assert.equal(
+      response.body,
+      '{"id":"1","state":"delayed","attemptsMade":1,"result":{"output":"HELLO"},"failedReason":null}'
+    );
   } finally {
-    if (alice.socket.readyState !== WebSocket.CLOSED) {
-      await alice.close();
-    }
-
     await server.close();
   }
 });
 
-test('chat server persists room messages and keeps rooms isolated', async () => {
-  const server = await startServer();
-  const alice = await connectClient(server.url, 'general', 'alice');
+test('api returns errors for invalid json, missing jobs, and missing routes', async () => {
+  const server = await startServer(
+    createHandler({
+      async enqueueJob() {
+        return { id: '1' };
+      },
+      async getJob() {
+        return null;
+      }
+    })
+  );
 
   try {
-    await alice.nextEvent();
-    await alice.nextEvent();
-    alice.socket.send(JSON.stringify({ type: 'message', body: 'saved' }));
-
-    const savedMessage = await alice.nextEvent();
-
-    await alice.close();
-
-    const replay = await connectClient(server.url, 'general', 'replay');
-
-    try {
-      const history = await replay.nextEvent();
-
-      assert.equal(history.type, 'history');
-      assert.equal(history.room, 'general');
-      assert.deepEqual(history.messages, [
-        {
-          room: 'general',
-          user: 'alice',
-          body: 'saved',
-          createdAt: savedMessage.createdAt
-        }
-      ]);
-      assert.deepEqual(await replay.nextEvent(), {
-        type: 'presence',
-        room: 'general',
-        users: ['replay']
-      });
-    } finally {
-      await replay.close();
-    }
-
-    const otherRoom = await connectClient(server.url, 'other', 'bob');
-
-    try {
-      assert.deepEqual(await otherRoom.nextEvent(), {
-        type: 'history',
-        room: 'other',
-        messages: []
-      });
-      assert.deepEqual(await otherRoom.nextEvent(), {
-        type: 'presence',
-        room: 'other',
-        users: ['bob']
-      });
-    } finally {
-      await otherRoom.close();
-    }
-  } finally {
-    if (alice.socket.readyState !== WebSocket.CLOSED) {
-      await alice.close();
-    }
-
-    await server.close();
-  }
-});
-
-test('chat server closes invalid websocket sessions and plain http requires upgrade', async () => {
-  const server = await startServer();
-
-  try {
-    const response = await fetch(server.url);
-
-    assert.equal(response.status, 426);
-    assert.equal(await response.text(), '{"error":"WebSocket upgrade required"}');
-
-    const missing = new WebSocket(`${server.url.replace(/^http/, 'ws')}/chat?user=alice`);
-    const missingClosed = waitForClose(missing);
-
-    await new Promise((resolve, reject) => {
-      missing.once('open', resolve);
-      missing.once('error', reject);
+    let response = await request(server.url, '/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{'
     });
 
-    assert.deepEqual(await missingClosed, {
-      code: 1008,
-      reason: 'room_and_user_required'
-    });
+    assert.equal(response.status, 400);
+    assert.equal(response.body, '{"error":"Invalid JSON"}');
 
-    const invalid = await connectClient(server.url, 'general', 'alice');
+    response = await request(server.url, '/jobs/missing');
 
-    try {
-      await invalid.nextEvent();
-      await invalid.nextEvent();
+    assert.equal(response.status, 404);
+    assert.equal(response.body, '{"error":"Job not found"}');
 
-      const closed = waitForClose(invalid.socket);
+    response = await request(server.url, '/missing');
 
-      invalid.socket.send('not-json');
-
-      assert.deepEqual(await closed, {
-        code: 1003,
-        reason: 'invalid_json'
-      });
-    } finally {
-      if (invalid.socket.readyState !== WebSocket.CLOSED) {
-        await invalid.close();
-      }
-    }
-
-    const wrongShape = await connectClient(server.url, 'general', 'bob');
-
-    try {
-      await wrongShape.nextEvent();
-      await wrongShape.nextEvent();
-
-      const closed = waitForClose(wrongShape.socket);
-
-      wrongShape.socket.send(JSON.stringify({ type: 'presence' }));
-
-      assert.deepEqual(await closed, {
-        code: 1003,
-        reason: 'invalid_message'
-      });
-    } finally {
-      if (wrongShape.socket.readyState !== WebSocket.CLOSED) {
-        await wrongShape.close();
-      }
-    }
+    assert.equal(response.status, 404);
+    assert.equal(response.body, '{"error":"Route not found"}');
   } finally {
     await server.close();
   }

@@ -1,18 +1,47 @@
 services:
+  redis:
+    image: redis:8.6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+      start_period: 1s
   api:
     build:
       context: .
       target: runtime
-    image: realtime-chat-backend:runtime
+    image: job-queue-system:runtime
+    command: ["sh", "-lc", "npm run migrate && node src/server.js"]
+    depends_on:
+      redis:
+        condition: service_healthy
     environment:
-      DATABASE_PATH: /data/chat.sqlite
       PORT: "3000"
+      QUEUE_NAME: jobs
+      REDIS_URL: redis://redis:6379
     ports:
       - "3000:3000"
-    volumes:
-      - chat-data:/data
     healthcheck:
       test: ["CMD", "node", "scripts/healthcheck.js"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+      start_period: 1s
+  worker:
+    build:
+      context: .
+      target: runtime
+    image: job-queue-system:runtime
+    command: ["sh", "-lc", "npm run migrate && node src/worker.js"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      QUEUE_NAME: jobs
+      REDIS_URL: redis://redis:6379
+    healthcheck:
+      test: ["CMD", "node", "scripts/worker-healthcheck.js"]
       interval: 1s
       timeout: 3s
       retries: 30
@@ -21,7 +50,10 @@ services:
     build:
       context: .
       target: test
-    image: realtime-chat-backend:test
-
-volumes:
-  chat-data:
+    image: job-queue-system:test
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      QUEUE_NAME: jobs
+      REDIS_URL: redis://redis:6379

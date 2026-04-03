@@ -2,10 +2,10 @@
 
 ## Dependencies
 
-- Runtime dependencies: `ws@8.20.0`, `better-sqlite3@12.8.0`
+- Runtime dependencies: `bullmq@5.73.0`, `ioredis@5.10.1`
 - Dev dependencies: `eslint@10.1.0`, `c8@11.0.0`
 
 ## Result
 
 - `npm audit --audit-level=low`: passed
-- Audit date: 2026-04-02
+- Audit date: 2026-04-03
