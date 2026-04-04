@@ -1,31 +1,51 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  readAuthToken,
+  readAuthSecret,
+  readAuthServiceUrl,
+  readPaymentServiceUrl,
   readPort,
-  readRateLimitLimit,
-  readRateLimitWindowMs,
-  readRoutes,
   readServiceName
 } from '../../src/config.js';
 
 test('config reads explicit values and defaults', () => {
-  assert.equal(readPort({ PORT: '4321' }), 4321);
-  assert.equal(readPort({}), 3000);
-  assert.equal(readAuthToken({ AUTH_TOKEN: 'token' }), 'token');
-  assert.equal(readAuthToken({}), 'platform-token');
-  assert.equal(readRateLimitLimit({ RATE_LIMIT_LIMIT: '3' }), 3);
-  assert.equal(readRateLimitLimit({}), 2);
-  assert.equal(readRateLimitWindowMs({ RATE_LIMIT_WINDOW_MS: '2000' }), 2000);
-  assert.equal(readRateLimitWindowMs({}), 1000);
-  assert.deepEqual(readRoutes({ SERVICE_A_URL: 'http://a', SERVICE_B_URL: 'http://b' }), [
-    { prefix: '/service-a', service: 'service-a', targetUrl: 'http://a' },
-    { prefix: '/service-b', service: 'service-b', targetUrl: 'http://b' }
-  ]);
-  assert.deepEqual(readRoutes({}), [
-    { prefix: '/service-a', service: 'service-a', targetUrl: 'http://127.0.0.1:3001' },
-    { prefix: '/service-b', service: 'service-b', targetUrl: 'http://127.0.0.1:3002' }
-  ]);
-  assert.equal(readServiceName({ SERVICE_NAME: 'service-a' }), 'service-a');
-  assert.equal(readServiceName({}), 'service');
+  const previous = {
+    AUTH_SECRET: process.env.AUTH_SECRET,
+    AUTH_SERVICE_URL: process.env.AUTH_SERVICE_URL,
+    PAYMENT_SERVICE_URL: process.env.PAYMENT_SERVICE_URL,
+    PORT: process.env.PORT,
+    SERVICE_NAME: process.env.SERVICE_NAME
+  };
+
+  delete process.env.AUTH_SECRET;
+  delete process.env.AUTH_SERVICE_URL;
+  delete process.env.PAYMENT_SERVICE_URL;
+  delete process.env.PORT;
+  delete process.env.SERVICE_NAME;
+
+  assert.equal(readAuthSecret(), 'platform-secret');
+  assert.equal(readAuthServiceUrl(), 'http://127.0.0.1:3000');
+  assert.equal(readPaymentServiceUrl(), 'http://127.0.0.1:3002');
+  assert.equal(readPort(), 3000);
+  assert.equal(readServiceName(), 'auth');
+
+  process.env.AUTH_SECRET = 'other-secret';
+  process.env.AUTH_SERVICE_URL = 'http://auth.internal';
+  process.env.PAYMENT_SERVICE_URL = 'http://payment.internal';
+  process.env.PORT = '3010';
+  process.env.SERVICE_NAME = 'user';
+
+  assert.equal(readAuthSecret(), 'other-secret');
+  assert.equal(readAuthServiceUrl(), 'http://auth.internal');
+  assert.equal(readPaymentServiceUrl(), 'http://payment.internal');
+  assert.equal(readPort(), 3010);
+  assert.equal(readServiceName(), 'user');
+
+  for (const [key, value] of Object.entries(previous)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
 });

@@ -1,71 +1,42 @@
-# Scalable API Gateway
+# Multi-service Backend
 
-Minimal API gateway with service routing, bearer-token auth, fixed-window rate limiting, and request logging.
+Minimal distributed backend with three services:
+
+- auth service
+- user service
+- payment mock service
 
 ## Scope
 
-- Route requests to multiple upstream services
-- Enforce a gateway authentication layer
-- Enforce rate limiting before proxying
-- Log gateway request outcomes
+- service-to-service communication
+- explicit HTTP contracts
+- Docker multi-container local runtime
+
+## Services
+
+- Auth service on `:3000`
+  - `POST /register`
+  - `POST /login`
+  - `GET /verify`
+- User service on `:3001`
+  - `GET /users/me`
+  - `POST /users/me/payments`
+- Payment service on `:3002`
+  - `POST /payments`
 
 ## Stack
 
-- Node.js `24.14.1` Active LTS
-- Core modules: `http`
-- No runtime npm dependencies
+- Node.js `25.9.0`
+- Core modules only at runtime
 - ESLint `10.2.0`
 - c8 `11.0.0`
 - Docker Compose
-
-## API
-
-- Gateway routes:
-- `GET /service-a/*`
-- `GET /service-b/*`
-- `POST /service-a/*`
-- `POST /service-b/*`
-
-Authentication:
-
-```json
-Authorization: Bearer platform-token
-```
-
-Example proxied response:
-
-```json
-{
-  "body": "{\"task\":\"sync\"}",
-  "method": "POST",
-  "path": "/tasks",
-  "service": "service-b"
-}
-```
-
-Rate-limited response:
-
-```json
-{
-  "error": "Rate limit exceeded"
-}
-```
-
-Errors are returned as JSON:
-
-```json
-{
-  "error": "Message"
-}
-```
 
 ## Local Run
 
 ```bash
 docker compose up --build
 ```
-
-The gateway listens on [http://localhost:3000](http://localhost:3000).
 
 ## Validation
 
@@ -76,5 +47,3 @@ make request-smoke
 make docker-test
 make docker-down
 ```
-
-`make check` runs the migration step, lint, 100% coverage, and `npm audit`. `make docker-test` runs the containerized migration, lint, and coverage path.

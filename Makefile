@@ -1,6 +1,7 @@
 SHELL := /bin/sh
 
-API_URL := http://localhost:3000
+AUTH_URL := http://localhost:3000
+USER_URL := http://localhost:3001
 
 .PHONY: install migrate lint test coverage audit check docker-build docker-up docker-down docker-test request-smoke
 
@@ -26,10 +27,11 @@ check:
 	npm run check
 
 docker-build:
-	docker compose build gateway service-a service-b test
+	docker compose build auth user payment test
 
 docker-up:
-	docker compose up --build -d --wait gateway service-a service-b
+	docker compose down --remove-orphans
+	docker compose up --build -d --wait auth user payment
 
 docker-down:
 	docker compose down --remove-orphans
@@ -39,4 +41,4 @@ docker-test:
 	docker compose run --rm test
 
 request-smoke:
-	API_URL=$(API_URL) node scripts/request-smoke.js
+	AUTH_URL=$(AUTH_URL) USER_URL=$(USER_URL) node scripts/request-smoke.js

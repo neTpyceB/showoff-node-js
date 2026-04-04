@@ -1,113 +1,65 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { startProcess, stopProcess, waitForServer } from '../helpers/process.js';
 
-function startProcess(file, env) {
-  return spawn(process.execPath, [file], {
-    cwd: process.cwd(),
-    env: { ...process.env, ...env },
-    stdio: 'ignore'
+test('docker-like runtime supports the full client flow', async () => {
+  const authPort = 6100 + Math.floor(Math.random() * 500);
+  const userPort = authPort + 1;
+  const paymentPort = authPort + 2;
+  const auth = startProcess('src/server.js', {
+    AUTH_SECRET: 'platform-secret',
+    PORT: String(authPort),
+    SERVICE_NAME: 'auth'
   });
-}
-
-async function waitForServer(baseUrl) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    try {
-      const response = await fetch(`${baseUrl}/missing`);
-
-      if (response.status === 404) {
-        return;
-      }
-    } catch {}
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-
-  throw new Error('Server did not start');
-}
-
-async function waitForService(baseUrl) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    try {
-      const response = await fetch(`${baseUrl}/hello`);
-
-      if (response.status === 200) {
-        return;
-      }
-    } catch {}
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-
-  throw new Error('Service did not start');
-}
-
-async function stopServer(server, signal = 'SIGTERM') {
-  if (server.exitCode !== null || server.signalCode !== null) {
-    return;
-  }
-
-  await new Promise((resolve) => {
-    server.once('close', resolve);
-    server.kill(signal);
+  const payment = startProcess('src/server.js', {
+    PORT: String(paymentPort),
+    SERVICE_NAME: 'payment'
   });
-}
-
-test('gateway starts and applies rate limiting', async () => {
-  const gatewayPort = 4100 + Math.floor(Math.random() * 1000);
-  const serviceAPort = gatewayPort + 1;
-  const serviceBPort = gatewayPort + 2;
-  const baseUrl = `http://127.0.0.1:${gatewayPort}`;
-  const serviceA = startProcess('src/upstream-server.js', {
-    PORT: String(serviceAPort),
-    SERVICE_NAME: 'service-a'
-  });
-  const serviceB = startProcess('src/upstream-server.js', {
-    PORT: String(serviceBPort),
-    SERVICE_NAME: 'service-b'
-  });
-  const gateway = startProcess('src/server.js', {
-    AUTH_TOKEN: 'token',
-    PORT: String(gatewayPort),
-    RATE_LIMIT_LIMIT: '2',
-    RATE_LIMIT_WINDOW_MS: '1000',
-    SERVICE_A_URL: `http://127.0.0.1:${serviceAPort}`,
-    SERVICE_B_URL: `http://127.0.0.1:${serviceBPort}`
+  const user = startProcess('src/server.js', {
+    AUTH_SERVICE_URL: `http://127.0.0.1:${authPort}`,
+    PAYMENT_SERVICE_URL: `http://127.0.0.1:${paymentPort}`,
+    PORT: String(userPort),
+    SERVICE_NAME: 'user'
   });
 
   try {
-    await waitForService(`http://127.0.0.1:${serviceAPort}`);
-    await waitForService(`http://127.0.0.1:${serviceBPort}`);
-    await waitForServer(baseUrl);
+    await waitForServer(`http://127.0.0.1:${authPort}`);
+    await waitForServer(`http://127.0.0.1:${paymentPort}`);
+    await waitForServer(`http://127.0.0.1:${userPort}`);
 
-    const headers = { Authorization: 'Bearer token' };
-    let response = await fetch(`${baseUrl}/service-a/hello`, { headers });
-
-    assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), {
-      body: null,
-      method: 'GET',
-      path: '/hello',
-      service: 'service-a'
+    let response = await fetch(`http://127.0.0.1:${authPort}/register`, {
+      body: '{"email":"user@example.com","password":"secret"}',
+      headers: {
+        Connection: 'close',
+        'Content-Type': 'application/json'
+      },
+      method: 'POST'
     });
 
-    response = await fetch(`${baseUrl}/service-b/hello`, { headers });
+    assert.equal(response.status, 201);
 
-    assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), {
-      body: null,
-      method: 'GET',
-      path: '/hello',
-      service: 'service-b'
+    response = await fetch(`http://127.0.0.1:${authPort}/login`, {
+      body: '{"email":"user@example.com","password":"secret"}',
+      headers: {
+        Connection: 'close',
+        'Content-Type': 'application/json'
+      },
+      method: 'POST'
     });
 
-    response = await fetch(`${baseUrl}/service-a/hello`, { headers });
+    const { token } = await response.json();
+    response = await fetch(`http://127.0.0.1:${userPort}/users/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Connection: 'close'
+      }
+    });
 
-    assert.equal(response.status, 429);
-    assert.deepEqual(await response.json(), { error: 'Rate limit exceeded' });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { email: 'user@example.com', id: 1 });
   } finally {
-    await stopServer(gateway);
-    await stopServer(serviceA);
-    await stopServer(serviceB);
+    await stopProcess(user);
+    await stopProcess(payment);
+    await stopProcess(auth);
   }
 });
