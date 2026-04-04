@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 24.14.1
+          node-version: 25.9.0
           cache: npm
       - run: npm ci
       - run: npm run check
@@ -20,8 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - run: docker compose build gateway service-a service-b test
+      - run: docker compose build auth user payment test
       - run: docker compose run --rm test
-      - run: docker compose up -d --wait gateway service-a service-b
-      - run: docker compose exec -T gateway node scripts/request-smoke.js
+      - run: docker compose down --remove-orphans
+      - run: docker compose up -d --wait auth user payment
+      - run: docker compose exec -T auth env AUTH_URL=http://auth:3000 USER_URL=http://user:3001 node scripts/request-smoke.js
       - run: docker compose down --remove-orphans

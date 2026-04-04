@@ -1,23 +1,26 @@
 import { createServer } from 'node:http';
-import { createGatewayHandler } from './app.js';
-import { readAuthToken, readPort, readRateLimitLimit, readRateLimitWindowMs, readRoutes } from './config.js';
-import { createLogger } from './logger.js';
-import { createRateLimiter } from './rate-limit.js';
+import {
+  readAuthSecret,
+  readAuthServiceUrl,
+  readPaymentServiceUrl,
+  readPort,
+  readServiceName
+} from './config.js';
+import { createServiceHandler } from './service-factory.js';
 
+const serviceName = readServiceName();
+const port = readPort();
 const server = createServer(
-  createGatewayHandler({
-    authToken: readAuthToken(),
-    limiter: createRateLimiter({
-      limit: readRateLimitLimit(),
-      windowMs: readRateLimitWindowMs()
-    }),
-    log: createLogger(),
-    routes: readRoutes()
+  createServiceHandler({
+    authSecret: readAuthSecret(),
+    authServiceUrl: readAuthServiceUrl(),
+    paymentServiceUrl: readPaymentServiceUrl(),
+    serviceName
   })
 );
 
-server.listen(readPort(), () => {
-  process.stdout.write(`Listening on ${readPort()}\n`);
+server.listen(port, () => {
+  process.stdout.write(`Listening on ${serviceName} ${port}\n`);
 });
 
 function shutdown() {

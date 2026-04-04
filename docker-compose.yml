@@ -1,21 +1,13 @@
 services:
-  gateway:
+  auth:
     build:
       context: .
       target: runtime
-    image: scalable-api-gateway:runtime
-    depends_on:
-      service-a:
-        condition: service_healthy
-      service-b:
-        condition: service_healthy
+    image: multi-service-backend:runtime
     environment:
-      AUTH_TOKEN: platform-token
+      AUTH_SECRET: platform-secret
       PORT: "3000"
-      RATE_LIMIT_LIMIT: "2"
-      RATE_LIMIT_WINDOW_MS: "1000"
-      SERVICE_A_URL: http://service-a:3001
-      SERVICE_B_URL: http://service-b:3002
+      SERVICE_NAME: auth
     ports:
       - "3000:3000"
     healthcheck:
@@ -24,32 +16,41 @@ services:
       timeout: 3s
       retries: 30
       start_period: 1s
-  service-a:
+  user:
     build:
       context: .
       target: runtime
-    image: scalable-api-gateway:runtime
-    command: ["npm", "run", "start:service"]
+    image: multi-service-backend:runtime
+    depends_on:
+      auth:
+        condition: service_healthy
+      payment:
+        condition: service_healthy
     environment:
+      AUTH_SERVICE_URL: http://auth:3000
+      PAYMENT_SERVICE_URL: http://payment:3002
       PORT: "3001"
-      SERVICE_NAME: service-a
+      SERVICE_NAME: user
+    ports:
+      - "3001:3001"
     healthcheck:
-      test: ["CMD", "node", "scripts/service-healthcheck.js"]
+      test: ["CMD", "node", "scripts/healthcheck.js"]
       interval: 1s
       timeout: 3s
       retries: 30
       start_period: 1s
-  service-b:
+  payment:
     build:
       context: .
       target: runtime
-    image: scalable-api-gateway:runtime
-    command: ["npm", "run", "start:service"]
+    image: multi-service-backend:runtime
     environment:
       PORT: "3002"
-      SERVICE_NAME: service-b
+      SERVICE_NAME: payment
+    ports:
+      - "3002:3002"
     healthcheck:
-      test: ["CMD", "node", "scripts/service-healthcheck.js"]
+      test: ["CMD", "node", "scripts/healthcheck.js"]
       interval: 1s
       timeout: 3s
       retries: 30
@@ -58,4 +59,4 @@ services:
     build:
       context: .
       target: test
-    image: scalable-api-gateway:test
+    image: multi-service-backend:test

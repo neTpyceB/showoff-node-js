@@ -1,9 +1,7 @@
 export function readBearerToken(header) {
-  const match = header?.match(/^Bearer (.+)$/);
+  if (!header?.startsWith('Bearer ')) {
+    return null;
+  }
 
-  return match?.[1] ?? null;
-}
-
-export function isAuthorized(header, expectedToken) {
-  return readBearerToken(header) === expectedToken;
+  return header.slice(7);
 }
