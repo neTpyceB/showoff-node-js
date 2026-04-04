@@ -1,6 +1,5 @@
 FROM mirror.gcr.io/library/node:24.14.1-alpine3.22 AS deps
 WORKDIR /app
-RUN apk add --no-cache python3 make g++
 COPY package.json package-lock.json ./
 RUN npm ci --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
@@ -15,4 +14,4 @@ COPY package.json package-lock.json ./
 COPY src ./src
 COPY scripts ./scripts
 EXPOSE 3000
-CMD ["node", "src/server.js"]
+CMD ["npm", "start"]

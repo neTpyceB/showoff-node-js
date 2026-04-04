@@ -1,27 +1,28 @@
 import { createServer } from 'node:http';
-import { createHandler } from './app.js';
-import { readPort, readQueueName, readRedisUrl } from './config.js';
-import { createQueueRuntime } from './runtime.js';
+import { createGatewayHandler } from './app.js';
+import { readAuthToken, readPort, readRateLimitLimit, readRateLimitWindowMs, readRoutes } from './config.js';
+import { createLogger } from './logger.js';
+import { createRateLimiter } from './rate-limit.js';
 
-const runtime = createQueueRuntime({
-  queueName: readQueueName(),
-  redisUrl: readRedisUrl()
-});
-const server = createServer(createHandler(runtime.jobService));
+const server = createServer(
+  createGatewayHandler({
+    authToken: readAuthToken(),
+    limiter: createRateLimiter({
+      limit: readRateLimitLimit(),
+      windowMs: readRateLimitWindowMs()
+    }),
+    log: createLogger(),
+    routes: readRoutes()
+  })
+);
 
 server.listen(readPort(), () => {
   process.stdout.write(`Listening on ${readPort()}\n`);
 });
 
-async function shutdown() {
-  await new Promise((resolve) => server.close(resolve));
-  await runtime.close();
-  process.exit(0);
+function shutdown() {
+  server.close(() => process.exit(0));
 }
 
-process.on('SIGINT', () => {
-  void shutdown();
-});
-process.on('SIGTERM', () => {
-  void shutdown();
-});
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

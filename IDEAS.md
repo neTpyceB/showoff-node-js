@@ -2,8 +2,8 @@
 
 Not implemented.
 
-- Multiple queue priorities
-- Dead-letter queues
-- Job cancellation
+- Header-based service discovery
+- Distributed rate limiting
+- Multiple auth backends
 
 These remain outside the current scope until explicitly required.

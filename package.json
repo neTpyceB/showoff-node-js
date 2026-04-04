@@ -1,8 +1,8 @@
 {
-  "name": "job-queue-system",
+  "name": "scalable-api-gateway",
   "version": "1.0.0",
   "private": true,
-  "description": "Minimal Redis-backed job queue with background workers, retries, and delayed jobs.",
+  "description": "Minimal API gateway with service routing, auth, rate limiting, and logging.",
   "type": "module",
   "engines": {
     "node": ">=24.14.0 <25"
@@ -10,7 +10,7 @@
   "scripts": {
     "migrate": "node scripts/migrate.js",
     "start": "npm run migrate && node src/server.js",
-    "start:worker": "npm run migrate && node src/worker.js",
+    "start:service": "node src/upstream-server.js",
     "lint": "eslint .",
     "test:unit": "node --test \"test/unit/**/*.test.js\"",
     "test:integration": "node --test \"test/integration/**/*.test.js\"",
@@ -23,12 +23,9 @@
     "check:container": "npm run migrate && npm run lint && npm run coverage",
     "smoke:http": "node scripts/request-smoke.js"
   },
-  "dependencies": {
-    "bullmq": "5.73.0",
-    "ioredis": "5.10.1"
-  },
+  "dependencies": {},
   "devDependencies": {
     "c8": "11.0.0",
-    "eslint": "10.1.0"
+    "eslint": "10.2.0"
   }
 }

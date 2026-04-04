@@ -2,25 +2,27 @@
 
 ## Shape
 
-- `src/app.js`: HTTP handler for enqueue and job status
+- `src/app.js`: gateway proxy handler
+- `src/auth.js`: bearer-token parsing and auth check
 - `src/config.js`: env-based runtime configuration
-- `src/job-service.js`: queue-facing enqueue and status mapping
-- `src/processor.js`: worker job execution logic and retry trigger
-- `src/runtime.js`: BullMQ and Redis wiring
-- `src/server.js`: API process entrypoint
-- `src/worker.js`: worker process entrypoint
+- `src/logger.js`: structured request logging
+- `src/rate-limit.js`: fixed-window limiter
+- `src/router.js`: route matching and upstream URL construction
+- `src/server.js`: gateway process entrypoint
+- `src/upstream-handler.js`: minimal upstream service behavior
+- `src/upstream-server.js`: upstream service process entrypoint
 
 ## Runtime
 
-- The API process writes jobs into a BullMQ queue stored in Redis.
-- Each job contains the requested value, delay, and the attempt number that should still fail.
-- The worker process consumes jobs from Redis independently of the API process.
-- The processor throws until `attemptsMade` reaches `failUntilAttempt`, which exercises retry behavior.
-- Successful jobs return an uppercase result payload and failed jobs expose `failedReason`.
+- The gateway matches incoming paths by prefix and forwards them to upstream services.
+- The auth layer requires a configured bearer token before proxying any routed request.
+- The rate limiter runs in the gateway before upstream calls.
+- The gateway logs method, path, upstream service, and final status as JSON lines.
+- Upstream services are minimal HTTP servers used to verify routing behavior.
 
 ## Test Layers
 
-- Unit: config, processor, queue service, runtime wiring, and handler behavior
-- Integration: full HTTP enqueue and job status flow
-- E2E: spawned API process over real HTTP
-- Smoke: startup plus a minimal completed job flow
+- Unit: auth, config, logger, limiter, router, upstream handler, and gateway behavior
+- Integration: gateway plus in-process upstream services
+- E2E: spawned gateway and upstream processes over real HTTP
+- Smoke: startup plus authenticated routing and rate limiting

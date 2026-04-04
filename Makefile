@@ -26,10 +26,10 @@ check:
 	npm run check
 
 docker-build:
-	docker compose build api worker test
+	docker compose build gateway service-a service-b test
 
 docker-up:
-	docker compose up --build -d --wait redis api worker
+	docker compose up --build -d --wait gateway service-a service-b
 
 docker-down:
 	docker compose down --remove-orphans
