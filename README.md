@@ -1,60 +1,53 @@
-# Job Queue System
+# Scalable API Gateway
 
-Minimal Redis-backed async job system with delayed jobs, retries, and a separate worker process.
+Minimal API gateway with service routing, bearer-token auth, fixed-window rate limiting, and request logging.
 
 ## Scope
 
-- Enqueue background jobs over HTTP
-- Read job state over HTTP
-- Process jobs in a separate worker process
-- Delay job execution
-- Retry failed jobs until they succeed or exhaust attempts
+- Route requests to multiple upstream services
+- Enforce a gateway authentication layer
+- Enforce rate limiting before proxying
+- Log gateway request outcomes
 
 ## Stack
 
 - Node.js `24.14.1` Active LTS
 - Core modules: `http`
-- bullmq `5.73.0`
-- ioredis `5.10.1`
-- Redis `8.6.2-alpine`
-- ESLint `10.1.0`
+- No runtime npm dependencies
+- ESLint `10.2.0`
 - c8 `11.0.0`
 - Docker Compose
 
 ## API
 
-- `POST /jobs`
-- `GET /jobs/:id`
+- Gateway routes:
+- `GET /service-a/*`
+- `GET /service-b/*`
+- `POST /service-a/*`
+- `POST /service-b/*`
 
-`POST /jobs`
+Authentication:
+
+```json
+Authorization: Bearer platform-token
+```
+
+Example proxied response:
 
 ```json
 {
-  "value": "hello",
-  "delayMs": 400,
-  "failUntilAttempt": 1
+  "body": "{\"task\":\"sync\"}",
+  "method": "POST",
+  "path": "/tasks",
+  "service": "service-b"
 }
 ```
 
-Response:
+Rate-limited response:
 
 ```json
 {
-  "id": "1"
-}
-```
-
-`GET /jobs/:id`
-
-```json
-{
-  "id": "1",
-  "state": "completed",
-  "attemptsMade": 1,
-  "result": {
-    "output": "HELLO"
-  },
-  "failedReason": null
+  "error": "Rate limit exceeded"
 }
 ```
 
@@ -72,7 +65,7 @@ Errors are returned as JSON:
 docker compose up --build
 ```
 
-The API listens on [http://localhost:3000](http://localhost:3000).
+The gateway listens on [http://localhost:3000](http://localhost:3000).
 
 ## Validation
 

@@ -2,17 +2,17 @@
 
 ## Completed
 
-- Replace the previous project with a Redis job queue scope
-- Implement HTTP enqueue and job status endpoints
-- Implement a separate BullMQ worker process
-- Implement delayed jobs and retry behavior
+- Replace the previous project with an API gateway scope
+- Implement routing to multiple upstream services
+- Implement bearer-token auth and fixed-window rate limiting
+- Implement structured request logging
 - Add unit, integration, e2e, and smoke tests
 - Add Docker, Makefile, and CI workflow
 - Complete local validation, Docker validation, and dependency audit
 
 ## Current
 
-- Repository matches the current job queue scope
+- Repository matches the current gateway scope
 
 ## Next
 

@@ -1,95 +1,110 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHandler } from '../../src/app.js';
+import { createGatewayHandler } from '../../src/app.js';
 import { request, startServer } from '../helpers/http.js';
 
-test('handler creates a job and returns its id', async () => {
-  const payloads = [];
+test('gateway proxies authorized requests and logs routed responses', async () => {
+  const logs = [];
   const server = await startServer(
-    createHandler({
-      async enqueueJob(payload) {
-        payloads.push(payload);
-        return { id: '1' };
+    createGatewayHandler({
+      authToken: 'token',
+      fetchImpl: async (url, options) => {
+        assert.equal(url, 'http://service-a/hello');
+        assert.equal(options.method, 'GET');
+
+        return new Response(JSON.stringify({ service: 'service-a' }), {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200
+        });
       },
-      async getJob() {
-        return null;
-      }
+      limiter: { check: () => ({ allowed: true }) },
+      log: (entry) => logs.push(entry),
+      routes: [{ prefix: '/service-a', service: 'service-a', targetUrl: 'http://service-a' }]
     })
   );
 
   try {
-    const response = await request(server.url, '/jobs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: 'hello', delayMs: 0, failUntilAttempt: 0 })
+    const response = await request(server.url, '/service-a/hello', {
+      headers: { Authorization: 'Bearer token' }
     });
 
-    assert.equal(response.status, 201);
-    assert.equal(response.body, '{"id":"1"}');
-    assert.deepEqual(payloads, [{ value: 'hello', delayMs: 0, failUntilAttempt: 0 }]);
+    assert.equal(response.status, 200);
+    assert.equal(response.body, '{"service":"service-a"}');
+    assert.deepEqual(logs, [
+      { method: 'GET', path: '/service-a/hello', service: 'service-a', status: 200 }
+    ]);
   } finally {
     await server.close();
   }
 });
 
-test('handler returns job details, route not found, invalid json, and internal errors', async () => {
+test('gateway returns route, auth, rate-limit, json, and upstream errors', async () => {
+  const logs = [];
+  const allowed = [false, true, true];
   const server = await startServer(
-    createHandler({
-      async enqueueJob() {
-        throw new Error('boom');
-      },
-      async getJob(id) {
-        if (id === '1') {
-          return {
-            id: '1',
-            state: 'completed',
-            attemptsMade: 1,
-            result: { output: 'HELLO' },
-            failedReason: null
-          };
+    createGatewayHandler({
+      authToken: 'token',
+      fetchImpl: async (url, options) => {
+        if (url === 'http://service-b/fail') {
+          throw new Error('upstream failed');
         }
 
-        return null;
-      }
+        return new Response(options.body, {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200
+        });
+      },
+      limiter: {
+        check: () => ({ allowed: allowed.shift() ?? true })
+      },
+      log: (entry) => logs.push(entry),
+      routes: [{ prefix: '/service-b', service: 'service-b', targetUrl: 'http://service-b' }]
     })
   );
 
   try {
-    let response = await request(server.url, '/jobs/1');
-
-    assert.equal(response.status, 200);
-    assert.equal(
-      response.body,
-      '{"id":"1","state":"completed","attemptsMade":1,"result":{"output":"HELLO"},"failedReason":null}'
-    );
-
-    response = await request(server.url, '/jobs/missing');
+    let response = await request(server.url, '/missing');
 
     assert.equal(response.status, 404);
-    assert.equal(response.body, '{"error":"Job not found"}');
+    assert.equal(response.body, '{"error":"Route not found"}');
 
-    response = await request(server.url, '/jobs', {
+    response = await request(server.url, '/service-b/hello');
+
+    assert.equal(response.status, 401);
+    assert.equal(response.body, '{"error":"Unauthorized"}');
+
+    response = await request(server.url, '/service-b/hello', {
+      headers: { Authorization: 'Bearer token' }
+    });
+
+    assert.equal(response.status, 429);
+    assert.equal(response.body, '{"error":"Rate limit exceeded"}');
+
+    response = await request(server.url, '/service-b/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: 'Bearer token',
+        'Content-Type': 'application/json'
+      },
       body: '{'
     });
 
     assert.equal(response.status, 400);
     assert.equal(response.body, '{"error":"Invalid JSON"}');
 
-    response = await request(server.url, '/jobs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: 'hello', delayMs: 0, failUntilAttempt: 0 })
+    response = await request(server.url, '/service-b/fail', {
+      headers: { Authorization: 'Bearer token' }
     });
 
-    assert.equal(response.status, 500);
-    assert.equal(response.body, '{"error":"Internal server error"}');
-
-    response = await request(server.url, '/missing');
-
-    assert.equal(response.status, 404);
-    assert.equal(response.body, '{"error":"Route not found"}');
+    assert.equal(response.status, 502);
+    assert.equal(response.body, '{"error":"Upstream request failed"}');
+    assert.deepEqual(logs, [
+      { method: 'GET', path: '/missing', service: null, status: 404 },
+      { method: 'GET', path: '/service-b/hello', service: 'service-b', status: 401 },
+      { method: 'GET', path: '/service-b/hello', service: 'service-b', status: 429 },
+      { method: 'POST', path: '/service-b/tasks', service: 'service-b', status: 400 },
+      { method: 'GET', path: '/service-b/fail', service: 'service-b', status: 502 }
+    ]);
   } finally {
     await server.close();
   }

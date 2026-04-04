@@ -1,3 +1,6 @@
+import { isAuthorized, readBearerToken } from './auth.js';
+import { matchRoute, toUpstreamUrl } from './router.js';
+
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, { 'Content-Type': 'application/json' });
   response.end(JSON.stringify(payload));
@@ -13,40 +16,66 @@ async function readJsonBody(request) {
   return JSON.parse(Buffer.concat(chunks).toString());
 }
 
-export function createHandler(jobService) {
+export function createGatewayHandler({
+  authToken,
+  fetchImpl = fetch,
+  limiter,
+  log,
+  routes
+}) {
   return async (request, response) => {
-    if (request.method === 'POST' && request.url === '/jobs') {
-      try {
-        const payload = await readJsonBody(request);
-        const job = await jobService.enqueueJob(payload);
+    const url = new URL(request.url, 'http://localhost');
+    const route = matchRoute(url.pathname, routes);
 
-        sendJson(response, 201, { id: job.id });
-      } catch (error) {
-        if (error instanceof SyntaxError) {
-          sendJson(response, 400, { error: 'Invalid JSON' });
-          return;
-        }
-
-        sendJson(response, 500, { error: 'Internal server error' });
-      }
-
+    if (!route) {
+      sendJson(response, 404, { error: 'Route not found' });
+      log({ method: request.method, path: url.pathname, service: null, status: 404 });
       return;
     }
 
-    const match = request.url?.match(/^\/jobs\/([^/]+)$/);
+    if (!isAuthorized(request.headers.authorization, authToken)) {
+      sendJson(response, 401, { error: 'Unauthorized' });
+      log({ method: request.method, path: url.pathname, service: route.service, status: 401 });
+      return;
+    }
 
-    if (request.method === 'GET' && match) {
-      const job = await jobService.getJob(match[1]);
+    const key = `${request.socket.remoteAddress}:${readBearerToken(request.headers.authorization)}`;
+    const rateLimit = limiter.check(key);
 
-      if (!job) {
-        sendJson(response, 404, { error: 'Job not found' });
+    if (!rateLimit.allowed) {
+      sendJson(response, 429, { error: 'Rate limit exceeded' });
+      log({ method: request.method, path: url.pathname, service: route.service, status: 429 });
+      return;
+    }
+
+    try {
+      const body =
+        request.method === 'GET' || request.method === 'HEAD'
+          ? undefined
+          : await readJsonBody(request).then((payload) => JSON.stringify(payload));
+      const upstream = await fetchImpl(toUpstreamUrl(route, url), {
+        body,
+        headers: request.headers['content-type']
+          ? { 'Content-Type': request.headers['content-type'] }
+          : undefined,
+        method: request.method
+      });
+      const responseBody = await upstream.text();
+
+      response.writeHead(upstream.status, {
+        'Content-Type': 'application/json'
+      });
+      response.end(responseBody);
+      log({ method: request.method, path: url.pathname, service: route.service, status: upstream.status });
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendJson(response, 400, { error: 'Invalid JSON' });
+        log({ method: request.method, path: url.pathname, service: route.service, status: 400 });
         return;
       }
 
-      sendJson(response, 200, job);
-      return;
+      sendJson(response, 502, { error: 'Upstream request failed' });
+      log({ method: request.method, path: url.pathname, service: route.service, status: 502 });
     }
-
-    sendJson(response, 404, { error: 'Route not found' });
   };
 }

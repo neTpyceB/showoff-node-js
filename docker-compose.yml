@@ -1,25 +1,21 @@
 services:
-  redis:
-    image: redis:8.6.2-alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 1s
-      timeout: 3s
-      retries: 30
-      start_period: 1s
-  api:
+  gateway:
     build:
       context: .
       target: runtime
-    image: job-queue-system:runtime
-    command: ["sh", "-lc", "npm run migrate && node src/server.js"]
+    image: scalable-api-gateway:runtime
     depends_on:
-      redis:
+      service-a:
+        condition: service_healthy
+      service-b:
         condition: service_healthy
     environment:
+      AUTH_TOKEN: platform-token
       PORT: "3000"
-      QUEUE_NAME: jobs
-      REDIS_URL: redis://redis:6379
+      RATE_LIMIT_LIMIT: "2"
+      RATE_LIMIT_WINDOW_MS: "1000"
+      SERVICE_A_URL: http://service-a:3001
+      SERVICE_B_URL: http://service-b:3002
     ports:
       - "3000:3000"
     healthcheck:
@@ -28,20 +24,32 @@ services:
       timeout: 3s
       retries: 30
       start_period: 1s
-  worker:
+  service-a:
     build:
       context: .
       target: runtime
-    image: job-queue-system:runtime
-    command: ["sh", "-lc", "npm run migrate && node src/worker.js"]
-    depends_on:
-      redis:
-        condition: service_healthy
+    image: scalable-api-gateway:runtime
+    command: ["npm", "run", "start:service"]
     environment:
-      QUEUE_NAME: jobs
-      REDIS_URL: redis://redis:6379
+      PORT: "3001"
+      SERVICE_NAME: service-a
     healthcheck:
-      test: ["CMD", "node", "scripts/worker-healthcheck.js"]
+      test: ["CMD", "node", "scripts/service-healthcheck.js"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+      start_period: 1s
+  service-b:
+    build:
+      context: .
+      target: runtime
+    image: scalable-api-gateway:runtime
+    command: ["npm", "run", "start:service"]
+    environment:
+      PORT: "3002"
+      SERVICE_NAME: service-b
+    healthcheck:
+      test: ["CMD", "node", "scripts/service-healthcheck.js"]
       interval: 1s
       timeout: 3s
       retries: 30
@@ -50,10 +58,4 @@ services:
     build:
       context: .
       target: test
-    image: job-queue-system:test
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      QUEUE_NAME: jobs
-      REDIS_URL: redis://redis:6379
+    image: scalable-api-gateway:test
