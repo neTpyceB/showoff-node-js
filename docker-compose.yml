@@ -1,18 +1,16 @@
 services:
-  balancer:
+  api:
     build:
       context: .
       target: runtime
-    image: high-performance-system:runtime
+    image: event-driven-platform:runtime
     depends_on:
-      backend-a:
-        condition: service_healthy
-      backend-b:
+      redis:
         condition: service_healthy
     environment:
-      BACKEND_URLS: http://backend-a:3001,http://backend-b:3002
       PORT: "3000"
-      SERVICE_NAME: balancer
+      REDIS_URL: redis://redis:6379
+      SERVICE_NAME: api
     ports:
       - "3000:3000"
     healthcheck:
@@ -21,38 +19,57 @@ services:
       timeout: 3s
       retries: 30
       start_period: 1s
-  backend-a:
+  notifications:
     build:
       context: .
       target: runtime
-    image: high-performance-system:runtime
+    image: event-driven-platform:runtime
     depends_on:
       redis:
         condition: service_healthy
     environment:
       PORT: "3001"
-      INSTANCE_ID: backend-a
       REDIS_URL: redis://redis:6379
-      SERVICE_NAME: backend
+      RETRY_AFTER_MS: "100"
+      SERVICE_NAME: notifications
     healthcheck:
       test: ["CMD", "node", "scripts/healthcheck.js"]
       interval: 1s
       timeout: 3s
       retries: 30
       start_period: 1s
-  backend-b:
+  feed:
     build:
       context: .
       target: runtime
-    image: high-performance-system:runtime
+    image: event-driven-platform:runtime
     depends_on:
       redis:
         condition: service_healthy
     environment:
       PORT: "3002"
-      INSTANCE_ID: backend-b
       REDIS_URL: redis://redis:6379
-      SERVICE_NAME: backend
+      RETRY_AFTER_MS: "100"
+      SERVICE_NAME: feed
+    healthcheck:
+      test: ["CMD", "node", "scripts/healthcheck.js"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+      start_period: 1s
+  audit:
+    build:
+      context: .
+      target: runtime
+    image: event-driven-platform:runtime
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: "3003"
+      REDIS_URL: redis://redis:6379
+      RETRY_AFTER_MS: "100"
+      SERVICE_NAME: audit
     healthcheck:
       test: ["CMD", "node", "scripts/healthcheck.js"]
       interval: 1s
@@ -71,4 +88,4 @@ services:
     build:
       context: .
       target: test
-    image: high-performance-system:test
+    image: event-driven-platform:test

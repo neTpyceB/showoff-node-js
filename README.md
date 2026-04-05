@@ -1,26 +1,27 @@
-# High-performance System
+# Event-driven Platform
 
-Minimal production-shaped system with:
+Minimal distributed platform with:
 
-- Redis caching
-- load balancing across two backend instances
-- metrics and JSON-line logs
-- health checks
+- Redis Streams event bus
+- notifications service
+- activity feed service
+- audit logging service
+- retry of unacknowledged events
 
 ## Surface
 
-- `GET /records/:id`
-- `GET /metrics`
+- `POST /events`
+- `GET /notifications/:userId`
+- `GET /feed/:userId`
+- `GET /audit`
 - `GET /health`
 
-`GET /records/:id` returns:
+Publish payload:
 
 ```json
 {
-  "cached": false,
-  "id": "42",
-  "instanceId": "backend-a",
-  "value": "value-42"
+  "message": "created order",
+  "userId": "user-1"
 }
 ```
 
@@ -39,7 +40,7 @@ Minimal production-shaped system with:
 docker compose up --build
 ```
 
-The entrypoint is [http://localhost:3000](http://localhost:3000).
+The public API is [http://localhost:3000](http://localhost:3000).
 
 ## Validation
 

@@ -9,9 +9,45 @@ test('logger formats and writes json lines', () => {
   }, () => '2026-04-05T00:00:00.000Z');
 
   assert.equal(formatLog({ status: 200 }), '{"status":200}\n');
-  log({ method: 'GET', path: '/records/42', status: 200 });
+  log({ service: 'notifications', status: 'processed' });
   assert.equal(
     output,
-    '{"method":"GET","path":"/records/42","status":200,"time":"2026-04-05T00:00:00.000Z"}\n'
+    '{"service":"notifications","status":"processed","time":"2026-04-05T00:00:00.000Z"}\n'
   );
+});
+
+test('logger works with default stdout writer', () => {
+  const originalWrite = process.stdout.write;
+  let output = '';
+
+  process.stdout.write = ((chunk) => {
+    output += chunk;
+    return true;
+  });
+
+  try {
+    createLogger(undefined, () => '2026-04-05T00:00:00.000Z')({ service: 'audit', status: 'processed' });
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+
+  assert.equal(output, '{"service":"audit","status":"processed","time":"2026-04-05T00:00:00.000Z"}\n');
+});
+
+test('logger works with default time factory', () => {
+  const originalWrite = process.stdout.write;
+  let output = '';
+
+  process.stdout.write = ((chunk) => {
+    output += chunk;
+    return true;
+  });
+
+  try {
+    createLogger()({ service: 'feed', status: 'processed' });
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+
+  assert.match(output, /^\{"service":"feed","status":"processed","time":".+"\}\n$/);
 });

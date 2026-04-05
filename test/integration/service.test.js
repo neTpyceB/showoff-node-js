@@ -1,74 +1,61 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBackendHandler } from '../../src/backend-app.js';
-import { createBalancerHandler } from '../../src/balancer-app.js';
-import { createMetrics } from '../../src/metrics.js';
+import { createApiHandler } from '../../src/api-app.js';
+import { createWorkerRuntime } from '../../src/worker-runtime.js';
+import { createFakeStore } from '../helpers/fake-store.js';
 import { request, startServer } from '../helpers/http.js';
 
-function createSharedCache(store) {
-  return {
-    async get(key) {
-      return store.get(key) ?? null;
-    },
-    async ping() {
-      return 'PONG';
-    },
-    async set(key, value) {
-      store.set(key, value);
-    }
-  };
-}
-
-test('balancer and backends share cached records across instances', async () => {
-  const store = new Map();
-  const backendA = await startServer(
-    createBackendHandler({
-      cache: createSharedCache(store),
-      instanceId: 'backend-a',
-      log: () => {},
-      metrics: createMetrics()
-    })
-  );
-  const backendB = await startServer(
-    createBackendHandler({
-      cache: createSharedCache(store),
-      instanceId: 'backend-b',
-      log: () => {},
-      metrics: createMetrics()
-    })
-  );
-  const balancer = await startServer(
-    createBalancerHandler({
-      backendUrls: [backendA.url, backendB.url],
-      log: () => {},
-      metrics: createMetrics()
-    })
-  );
+test('api and workers build eventually consistent projections', async () => {
+  const store = createFakeStore();
+  const api = await startServer(createApiHandler({ store }));
+  const notifications = createWorkerRuntime({
+    consumerName: 'notifications-1',
+    log: () => {},
+    retryAfterMs: 0,
+    serviceName: 'notifications',
+    store
+  });
+  const feed = createWorkerRuntime({
+    consumerName: 'feed-1',
+    log: () => {},
+    retryAfterMs: 0,
+    serviceName: 'feed',
+    store
+  });
+  const audit = createWorkerRuntime({
+    consumerName: 'audit-1',
+    log: () => {},
+    retryAfterMs: 0,
+    serviceName: 'audit',
+    store
+  });
 
   try {
-    let response = await request(balancer.url, '/records/42');
+    let response = await request(api.url, '/events', {
+      body: '{"message":"created order","userId":"user-1"}',
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST'
+    });
 
+    assert.equal(response.status, 202);
+    const { eventId } = JSON.parse(response.body);
+
+    await notifications.tick();
+    await feed.tick();
+    await audit.tick();
+
+    response = await request(api.url, '/notifications/user-1');
     assert.equal(response.status, 200);
-    assert.equal(response.body, '{"cached":false,"id":"42","instanceId":"backend-a","value":"value-42"}');
+    assert.equal(response.body, `[{"eventId":"${eventId}","message":"created order","userId":"user-1"}]`);
 
-    response = await request(balancer.url, '/records/42');
-
+    response = await request(api.url, '/feed/user-1');
     assert.equal(response.status, 200);
-    assert.equal(response.body, '{"cached":true,"id":"42","instanceId":"backend-b","value":"value-42"}');
+    assert.equal(response.body, `[{"eventId":"${eventId}","message":"created order","userId":"user-1"}]`);
 
-    response = await request(balancer.url, '/metrics');
-    const metrics = JSON.parse(response.body);
-
-    assert.equal(metrics.loadBalancer.requestsTotal, 2);
-    assert.equal(metrics.backends.length, 2);
-
-    response = await request(balancer.url, '/health');
-
+    response = await request(api.url, '/audit');
     assert.equal(response.status, 200);
-    assert.equal(response.body, '{"backends":[{"instanceId":"backend-a","redis":"ok","status":"ok"},{"instanceId":"backend-b","redis":"ok","status":"ok"}],"status":"ok"}');
+    assert.equal(response.body, `[{"eventId":"${eventId}","message":"created order","userId":"user-1"}]`);
   } finally {
-    await backendA.close();
-    await backendB.close();
-    await balancer.close();
+    await api.close();
   }
 });

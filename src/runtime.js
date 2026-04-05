@@ -1,33 +1,43 @@
-import { createBackendHandler } from './backend-app.js';
-import { createBalancerHandler } from './balancer-app.js';
-import { connectRedisCache } from './cache.js';
+import { createApiHandler } from './api-app.js';
 import { createLogger } from './logger.js';
-import { createMetrics } from './metrics.js';
+import { connectRedisStore } from './store.js';
+import { createWorkerRuntime } from './worker-runtime.js';
 
-export async function createRuntimeHandler({
-  backendUrls,
-  connectRedisCacheImpl = connectRedisCache,
+export async function createRuntime({
+  connectRedisStoreImpl = connectRedisStore,
+  consumerName,
   createLoggerImpl = createLogger,
-  createMetricsImpl = createMetrics,
-  instanceId,
   redisUrl,
+  retryAfterMs,
   serviceName
 }) {
   const log = createLoggerImpl();
-  const metrics = createMetricsImpl();
+  const store = await connectRedisStoreImpl(redisUrl);
 
-  if (serviceName === 'backend') {
-    return createBackendHandler({
-      cache: await connectRedisCacheImpl(redisUrl),
-      instanceId,
-      log,
-      metrics
-    });
+  if (serviceName === 'api') {
+    return {
+      handler: createApiHandler({ store }),
+      stop: async () => {
+        await store.close?.();
+      }
+    };
   }
 
-  return createBalancerHandler({
-    backendUrls,
+  const worker = createWorkerRuntime({
+    consumerName,
     log,
-    metrics
+    retryAfterMs,
+    serviceName,
+    store
   });
+
+  return {
+    handler: worker.handler,
+    start: worker.start,
+    stop: async () => {
+      worker.stop();
+      await store.close?.();
+    },
+    tick: worker.tick
+  };
 }

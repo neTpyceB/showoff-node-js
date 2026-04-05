@@ -1,49 +1,55 @@
-const balancerUrl = process.env.BALANCER_URL ?? 'http://localhost:3000';
+const apiUrl = process.env.API_URL ?? 'http://localhost:3000';
 
-let response = await fetch(`${balancerUrl}/records/42`);
+let response = await fetch(`${apiUrl}/events`, {
+  body: JSON.stringify({ message: 'created order', userId: 'user-1' }),
+  headers: { 'Content-Type': 'application/json' },
+  method: 'POST'
+});
 
-if (response.status !== 200) {
-  throw new Error(`Expected 200 from first record request, received ${response.status}`);
+if (response.status !== 202) {
+  throw new Error(`Expected 202 from event publish, received ${response.status}`);
 }
 
-const first = await response.json();
+const { eventId } = await response.json();
 
-response = await fetch(`${balancerUrl}/records/42`);
-
-if (response.status !== 200) {
-  throw new Error(`Expected 200 from second record request, received ${response.status}`);
+if (!eventId) {
+  throw new Error('Missing eventId');
 }
 
-const second = await response.json();
+async function waitForProjection(path) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const projectionResponse = await fetch(`${apiUrl}${path}`);
 
-if (first.cached !== false || second.cached !== true) {
-  throw new Error('Unexpected cache behavior');
+    if (projectionResponse.status !== 200) {
+      throw new Error(`Expected 200 from ${path}, received ${projectionResponse.status}`);
+    }
+
+    const projection = await projectionResponse.json();
+
+    if (projection.length === 1) {
+      return projection;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(`Projection did not converge: ${path}`);
 }
 
-if (first.instanceId === second.instanceId) {
-  throw new Error('Load balancing did not reach both backend instances');
+const notifications = await waitForProjection('/notifications/user-1');
+const feed = await waitForProjection('/feed/user-1');
+const audit = await waitForProjection('/audit');
+
+for (const projection of [notifications, feed, audit]) {
+  if (projection[0].eventId !== eventId || projection[0].message !== 'created order' || projection[0].userId !== 'user-1') {
+    throw new Error('Unexpected projection payload');
+  }
 }
 
-response = await fetch(`${balancerUrl}/metrics`);
-
-if (response.status !== 200) {
-  throw new Error(`Expected 200 from metrics, received ${response.status}`);
-}
-
-const metrics = await response.json();
-
-if (metrics.loadBalancer.requestsTotal !== 2) {
-  throw new Error('Unexpected load balancer metrics');
-}
-
-if (metrics.backends.length !== 2) {
-  throw new Error('Unexpected backend metrics');
-}
-
-response = await fetch(`${balancerUrl}/health`);
+response = await fetch(`${apiUrl}/health`);
 
 if (response.status !== 200) {
   throw new Error(`Expected 200 from health, received ${response.status}`);
 }
 
-process.stdout.write('High-performance smoke passed\n');
+process.stdout.write('Event-driven smoke passed\n');

@@ -1,54 +1,63 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRuntimeHandler } from '../../src/runtime.js';
+import { createRuntime } from '../../src/runtime.js';
 
-test('runtime creates a backend handler through the redis connector', async () => {
-  const calls = [];
-  const handler = await createRuntimeHandler({
-    connectRedisCacheImpl: async (redisUrl) => {
-      calls.push(redisUrl);
-      return {
-        async get() {
-          return null;
-        },
-        async ping() {
-          return 'PONG';
-        },
-        async set() {}
-      };
-    },
-    createLoggerImpl: () => () => {},
-    createMetricsImpl: () => ({
-      recordCacheHit() {},
-      recordCacheMiss() {},
-      recordError() {},
-      recordRequest() {},
-      snapshot() {
-        return {};
+test('runtime creates the api handler', async () => {
+  let closed = false;
+  const runtime = await createRuntime({
+    connectRedisStoreImpl: async () => ({
+      async addEvent() {},
+      async close() {
+        closed = true;
+      },
+      async ping() {
+        return 'PONG';
+      },
+      async readList() {
+        return [];
       }
     }),
-    instanceId: 'backend-a',
     redisUrl: 'redis://cache.test:6379',
-    serviceName: 'backend'
+    serviceName: 'api'
   });
 
-  assert.equal(typeof handler, 'function');
-  assert.deepEqual(calls, ['redis://cache.test:6379']);
+  assert.equal(typeof runtime.handler, 'function');
+  await runtime.stop();
+  assert.equal(closed, true);
 });
 
-test('runtime creates a balancer handler without redis', async () => {
-  const handler = await createRuntimeHandler({
-    backendUrls: ['http://backend-a.test', 'http://backend-b.test'],
-    createLoggerImpl: () => () => {},
-    createMetricsImpl: () => ({
-      recordError() {},
-      recordRequest() {},
-      snapshot() {
-        return {};
+test('runtime creates a worker handler and tick path', async () => {
+  let closed = false;
+  let ensured = false;
+  const runtime = await createRuntime({
+    connectRedisStoreImpl: async () => ({
+      async ack() {},
+      async appendList() {},
+      async claimPending() {
+        return [];
+      },
+      async close() {
+        closed = true;
+      },
+      async ensureGroup() {
+        ensured = true;
+      },
+      async ping() {
+        return 'PONG';
+      },
+      async readNew() {
+        return [];
       }
     }),
-    serviceName: 'balancer'
+    consumerName: 'worker-1',
+    redisUrl: 'redis://cache.test:6379',
+    retryAfterMs: 0,
+    serviceName: 'audit'
   });
 
-  assert.equal(typeof handler, 'function');
+  assert.equal(typeof runtime.handler, 'function');
+  await runtime.tick();
+  assert.equal(ensured, true);
+  await runtime.stop();
+  assert.equal(closed, true);
 });
