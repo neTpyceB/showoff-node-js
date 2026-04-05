@@ -22,11 +22,11 @@ export async function stopProcess(processHandle, signal = 'SIGTERM') {
 export async function waitForServer(baseUrl) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     try {
-      const response = await fetch(`${baseUrl}/missing`, {
+      const response = await fetch(`${baseUrl}/health`, {
         headers: { Connection: 'close' }
       });
 
-      if (response.status === 404) {
+      if (response.status === 200) {
         return;
       }
     } catch {}

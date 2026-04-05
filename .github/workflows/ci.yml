@@ -20,9 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - run: docker compose build auth user payment test
+      - run: docker compose build balancer backend-a backend-b test
       - run: docker compose run --rm test
       - run: docker compose down --remove-orphans
-      - run: docker compose up -d --wait auth user payment
-      - run: docker compose exec -T auth env AUTH_URL=http://auth:3000 USER_URL=http://user:3001 node scripts/request-smoke.js
+      - run: docker compose up -d --wait balancer backend-a backend-b redis
+      - run: docker compose exec -T balancer env BALANCER_URL=http://balancer:3000 node scripts/request-smoke.js
       - run: docker compose down --remove-orphans

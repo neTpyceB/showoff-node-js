@@ -1,45 +1,45 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  readAuthSecret,
-  readAuthServiceUrl,
-  readPaymentServiceUrl,
+  readBackendUrls,
+  readInstanceId,
   readPort,
+  readRedisUrl,
   readServiceName
 } from '../../src/config.js';
 
 test('config reads explicit values and defaults', () => {
   const previous = {
-    AUTH_SECRET: process.env.AUTH_SECRET,
-    AUTH_SERVICE_URL: process.env.AUTH_SERVICE_URL,
-    PAYMENT_SERVICE_URL: process.env.PAYMENT_SERVICE_URL,
+    BACKEND_URLS: process.env.BACKEND_URLS,
+    INSTANCE_ID: process.env.INSTANCE_ID,
     PORT: process.env.PORT,
+    REDIS_URL: process.env.REDIS_URL,
     SERVICE_NAME: process.env.SERVICE_NAME
   };
 
-  delete process.env.AUTH_SECRET;
-  delete process.env.AUTH_SERVICE_URL;
-  delete process.env.PAYMENT_SERVICE_URL;
+  delete process.env.BACKEND_URLS;
+  delete process.env.INSTANCE_ID;
   delete process.env.PORT;
+  delete process.env.REDIS_URL;
   delete process.env.SERVICE_NAME;
 
-  assert.equal(readAuthSecret(), 'platform-secret');
-  assert.equal(readAuthServiceUrl(), 'http://127.0.0.1:3000');
-  assert.equal(readPaymentServiceUrl(), 'http://127.0.0.1:3002');
+  assert.deepEqual(readBackendUrls(), ['http://127.0.0.1:3001', 'http://127.0.0.1:3002']);
+  assert.equal(readInstanceId(), 'backend-a');
   assert.equal(readPort(), 3000);
-  assert.equal(readServiceName(), 'auth');
+  assert.equal(readRedisUrl(), 'redis://127.0.0.1:6379');
+  assert.equal(readServiceName(), 'balancer');
 
-  process.env.AUTH_SECRET = 'other-secret';
-  process.env.AUTH_SERVICE_URL = 'http://auth.internal';
-  process.env.PAYMENT_SERVICE_URL = 'http://payment.internal';
+  process.env.BACKEND_URLS = 'http://backend-a.internal,http://backend-b.internal';
+  process.env.INSTANCE_ID = 'backend-b';
   process.env.PORT = '3010';
-  process.env.SERVICE_NAME = 'user';
+  process.env.REDIS_URL = 'redis://cache.internal:6379';
+  process.env.SERVICE_NAME = 'backend';
 
-  assert.equal(readAuthSecret(), 'other-secret');
-  assert.equal(readAuthServiceUrl(), 'http://auth.internal');
-  assert.equal(readPaymentServiceUrl(), 'http://payment.internal');
+  assert.deepEqual(readBackendUrls(), ['http://backend-a.internal', 'http://backend-b.internal']);
+  assert.equal(readInstanceId(), 'backend-b');
   assert.equal(readPort(), 3010);
-  assert.equal(readServiceName(), 'user');
+  assert.equal(readRedisUrl(), 'redis://cache.internal:6379');
+  assert.equal(readServiceName(), 'backend');
 
   for (const [key, value] of Object.entries(previous)) {
     if (value === undefined) {

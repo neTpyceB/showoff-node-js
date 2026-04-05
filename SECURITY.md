@@ -1,6 +1,6 @@
 # Security
 
-- Passwords are hashed with `scrypt`.
-- Bearer tokens are HMAC-signed.
-- Auth verification is delegated to the auth service instead of duplicating token logic in the user service.
-- No secrets are committed beyond local development defaults used in Docker.
+- Redis is reachable only on the internal Docker network in the default stack.
+- Public traffic goes through the balancer only.
+- Health and metrics endpoints expose only operational state required by the current scope.
+- No application secrets are committed beyond local development defaults.
