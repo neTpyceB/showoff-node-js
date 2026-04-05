@@ -1,24 +1,29 @@
 import { createServer } from 'node:http';
-import { readBackendUrls, readInstanceId, readPort, readRedisUrl, readServiceName } from './config.js';
-import { createRuntimeHandler } from './runtime.js';
+import { readConsumerName, readPort, readRedisUrl, readRetryAfterMs, readServiceName } from './config.js';
+import { createRuntime } from './runtime.js';
 
 const serviceName = readServiceName();
 const port = readPort();
-const handler = await createRuntimeHandler({
-  backendUrls: readBackendUrls(),
-  instanceId: readInstanceId(),
+const runtime = await createRuntime({
+  consumerName: readConsumerName(),
   redisUrl: readRedisUrl(),
+  retryAfterMs: readRetryAfterMs(),
   serviceName
 });
+const stopWorker = runtime.start?.() ?? (() => {});
 
-const server = createServer(handler);
+const server = createServer(runtime.handler);
 
 server.listen(port, () => {
   process.stdout.write(`Listening on ${serviceName} ${port}\n`);
 });
 
 function shutdown() {
-  server.close(() => process.exit(0));
+  stopWorker();
+  server.close(async () => {
+    await runtime.stop?.();
+    process.exit(0);
+  });
 }
 
 process.on('SIGINT', shutdown);

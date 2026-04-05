@@ -1,8 +1,8 @@
 {
-  "name": "high-performance-system",
+  "name": "event-driven-platform",
   "version": "1.0.0",
   "private": true,
-  "description": "Minimal load-balanced system with Redis caching, metrics, logs, and health checks.",
+  "description": "Minimal event-driven platform with Redis Streams, projections, and retry handling.",
   "type": "module",
   "engines": {
     "node": ">=25.9.0 <26"

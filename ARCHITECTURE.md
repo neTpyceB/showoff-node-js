@@ -2,28 +2,29 @@
 
 ## Services
 
-- Balancer service exposes the public HTTP surface and routes record requests in round-robin order.
-- Backend service instances read and write records through shared Redis cache.
-- Redis stores cached records shared by both backend instances.
+- API service publishes events to the Redis Streams bus and serves read models.
+- Notifications service consumes events and builds `notifications:<userId>`.
+- Feed service consumes events and builds `feed:<userId>`.
+- Audit service consumes events and builds `audit`.
+- Redis stores the event stream and the eventually consistent projections.
 
 ## Flow
 
-- Client calls balancer `GET /records/:id`.
-- Balancer forwards the request to backend A or backend B.
-- Backend checks Redis key `record:<id>`.
-- Cache miss writes the generated record into Redis.
-- Cache hit returns the shared cached record from Redis.
+- Client publishes `POST /events`.
+- API appends the event to the `events` stream.
+- Each worker service consumes the same event through its own consumer group.
+- Successful processing appends projection data and acknowledges the stream entry.
+- Failed processing leaves the entry pending until the retry cycle claims it again.
 
-## Observability
+## Consistency
 
-- Balancer exposes aggregated metrics from itself and both backends.
-- Each backend exposes its own metrics and health.
-- Balancer and backends emit JSON-line logs.
+- `POST /events` is accepted before projections are updated.
+- Notifications, feed, and audit are eventually consistent views derived from the same event stream.
 
 ## Runtime
 
 - One shared Node image
-- One balancer container
-- Two backend containers
+- One API container
+- Three worker containers
 - One Redis container
 - One test container

@@ -20,9 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - run: docker compose build balancer backend-a backend-b test
+      - run: docker compose build api notifications feed audit test
       - run: docker compose run --rm test
       - run: docker compose down --remove-orphans
-      - run: docker compose up -d --wait balancer backend-a backend-b redis
-      - run: docker compose exec -T balancer env BALANCER_URL=http://balancer:3000 node scripts/request-smoke.js
+      - run: docker compose up -d --wait api notifications feed audit redis
+      - run: docker compose exec -T api env API_URL=http://api:3000 node scripts/request-smoke.js
       - run: docker compose down --remove-orphans
