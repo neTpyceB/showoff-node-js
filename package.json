@@ -1,8 +1,8 @@
 {
-  "name": "multi-service-backend",
+  "name": "high-performance-system",
   "version": "1.0.0",
   "private": true,
-  "description": "Minimal multi-service backend with auth, user, and payment services.",
+  "description": "Minimal load-balanced system with Redis caching, metrics, logs, and health checks.",
   "type": "module",
   "engines": {
     "node": ">=25.9.0 <26"
@@ -22,7 +22,9 @@
     "check:container": "npm run migrate && npm run lint && npm run coverage",
     "smoke:http": "node scripts/request-smoke.js"
   },
-  "dependencies": {},
+  "dependencies": {
+    "redis": "5.11.0"
+  },
   "devDependencies": {
     "c8": "11.0.0",
     "eslint": "10.2.0"

@@ -1,33 +1,34 @@
-# Multi-service Backend
+# High-performance System
 
-Minimal distributed backend with three services:
+Minimal production-shaped system with:
 
-- auth service
-- user service
-- payment mock service
+- Redis caching
+- load balancing across two backend instances
+- metrics and JSON-line logs
+- health checks
 
-## Scope
+## Surface
 
-- service-to-service communication
-- explicit HTTP contracts
-- Docker multi-container local runtime
+- `GET /records/:id`
+- `GET /metrics`
+- `GET /health`
 
-## Services
+`GET /records/:id` returns:
 
-- Auth service on `:3000`
-  - `POST /register`
-  - `POST /login`
-  - `GET /verify`
-- User service on `:3001`
-  - `GET /users/me`
-  - `POST /users/me/payments`
-- Payment service on `:3002`
-  - `POST /payments`
+```json
+{
+  "cached": false,
+  "id": "42",
+  "instanceId": "backend-a",
+  "value": "value-42"
+}
+```
 
 ## Stack
 
 - Node.js `25.9.0`
-- Core modules only at runtime
+- Redis client `5.11.0`
+- Redis `8.6.1-alpine`
 - ESLint `10.2.0`
 - c8 `11.0.0`
 - Docker Compose
@@ -37,6 +38,8 @@ Minimal distributed backend with three services:
 ```bash
 docker compose up --build
 ```
+
+The entrypoint is [http://localhost:3000](http://localhost:3000).
 
 ## Validation
 

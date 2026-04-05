@@ -1,7 +1,6 @@
 SHELL := /bin/sh
 
-AUTH_URL := http://localhost:3000
-USER_URL := http://localhost:3001
+BALANCER_URL := http://localhost:3000
 
 .PHONY: install migrate lint test coverage audit check docker-build docker-up docker-down docker-test request-smoke
 
@@ -27,11 +26,11 @@ check:
 	npm run check
 
 docker-build:
-	docker compose build auth user payment test
+	docker compose build balancer backend-a backend-b test
 
 docker-up:
 	docker compose down --remove-orphans
-	docker compose up --build -d --wait auth user payment
+	docker compose up --build -d --wait balancer backend-a backend-b redis
 
 docker-down:
 	docker compose down --remove-orphans
@@ -41,4 +40,4 @@ docker-test:
 	docker compose run --rm test
 
 request-smoke:
-	AUTH_URL=$(AUTH_URL) USER_URL=$(USER_URL) node scripts/request-smoke.js
+	BALANCER_URL=$(BALANCER_URL) node scripts/request-smoke.js

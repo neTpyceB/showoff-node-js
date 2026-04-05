@@ -1,82 +1,74 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAuthHandler } from '../../src/auth-service.js';
-import { createPaymentHandler } from '../../src/payment-service.js';
-import { createUserHandler } from '../../src/user-service.js';
+import { createBackendHandler } from '../../src/backend-app.js';
+import { createBalancerHandler } from '../../src/balancer-app.js';
+import { createMetrics } from '../../src/metrics.js';
 import { request, startServer } from '../helpers/http.js';
 
-test('services communicate across auth, user, and payment boundaries', async () => {
-  const auth = await startServer(createAuthHandler({ secret: 'platform-secret' }));
-  const payment = await startServer(createPaymentHandler({}));
-  const user = await startServer(
-    createUserHandler({
-      authServiceUrl: auth.url,
-      paymentServiceUrl: payment.url
+function createSharedCache(store) {
+  return {
+    async get(key) {
+      return store.get(key) ?? null;
+    },
+    async ping() {
+      return 'PONG';
+    },
+    async set(key, value) {
+      store.set(key, value);
+    }
+  };
+}
+
+test('balancer and backends share cached records across instances', async () => {
+  const store = new Map();
+  const backendA = await startServer(
+    createBackendHandler({
+      cache: createSharedCache(store),
+      instanceId: 'backend-a',
+      log: () => {},
+      metrics: createMetrics()
+    })
+  );
+  const backendB = await startServer(
+    createBackendHandler({
+      cache: createSharedCache(store),
+      instanceId: 'backend-b',
+      log: () => {},
+      metrics: createMetrics()
+    })
+  );
+  const balancer = await startServer(
+    createBalancerHandler({
+      backendUrls: [backendA.url, backendB.url],
+      log: () => {},
+      metrics: createMetrics()
     })
   );
 
   try {
-    let response = await request(auth.url, '/register', {
-      body: '{"email":"user@example.com","password":"secret"}',
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST'
-    });
-
-    assert.equal(response.status, 201);
-
-    response = await request(auth.url, '/login', {
-      body: '{"email":"user@example.com","password":"secret"}',
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST'
-    });
-
-    const { token } = JSON.parse(response.body);
-
-    response = await request(user.url, '/users/me', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    let response = await request(balancer.url, '/records/42');
 
     assert.equal(response.status, 200);
-    assert.equal(response.body, '{"email":"user@example.com","id":1}');
+    assert.equal(response.body, '{"cached":false,"id":"42","instanceId":"backend-a","value":"value-42"}');
 
-    response = await request(user.url, '/users/me/payments', {
-      body: '{"amount":25}',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      method: 'POST'
-    });
+    response = await request(balancer.url, '/records/42');
 
-    assert.equal(response.status, 201);
-    assert.equal(response.body, '{"amount":25,"id":1,"status":"approved","userId":1}');
+    assert.equal(response.status, 200);
+    assert.equal(response.body, '{"cached":true,"id":"42","instanceId":"backend-b","value":"value-42"}');
+
+    response = await request(balancer.url, '/metrics');
+    const metrics = JSON.parse(response.body);
+
+    assert.equal(metrics.loadBalancer.requestsTotal, 2);
+    assert.equal(metrics.backends.length, 2);
+
+    response = await request(balancer.url, '/health');
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body, '{"backends":[{"instanceId":"backend-a","redis":"ok","status":"ok"},{"instanceId":"backend-b","redis":"ok","status":"ok"}],"status":"ok"}');
   } finally {
-    await auth.close();
-    await payment.close();
-    await user.close();
-  }
-});
-
-test('services reject invalid authorization across service boundaries', async () => {
-  const auth = await startServer(createAuthHandler({ secret: 'platform-secret' }));
-  const payment = await startServer(createPaymentHandler({}));
-  const user = await startServer(
-    createUserHandler({
-      authServiceUrl: auth.url,
-      paymentServiceUrl: payment.url
-    })
-  );
-
-  try {
-    const response = await request(user.url, '/users/me', {
-      headers: { Authorization: 'Bearer invalid' }
-    });
-
-    assert.equal(response.status, 401);
-    assert.equal(response.body, '{"error":"Unauthorized"}');
-  } finally {
-    await auth.close();
-    await payment.close();
-    await user.close();
+    await backendA.close();
+    await backendB.close();
+    await balancer.close();
   }
 });

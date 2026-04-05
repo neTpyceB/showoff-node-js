@@ -2,20 +2,28 @@
 
 ## Services
 
-- Auth service stores users in memory, hashes passwords, issues signed bearer tokens, and verifies them.
-- User service accepts client requests, validates bearer tokens through the auth service, and calls the payment service for payment creation.
-- Payment service returns approved mock payments and stores them in memory.
+- Balancer service exposes the public HTTP surface and routes record requests in round-robin order.
+- Backend service instances read and write records through shared Redis cache.
+- Redis stores cached records shared by both backend instances.
 
-## Communication
+## Flow
 
-- Client registers and logs in against auth.
-- Client calls user with `Authorization: Bearer <token>`.
-- User calls auth `GET /verify`.
-- User calls payment `POST /payments`.
+- Client calls balancer `GET /records/:id`.
+- Balancer forwards the request to backend A or backend B.
+- Backend checks Redis key `record:<id>`.
+- Cache miss writes the generated record into Redis.
+- Cache hit returns the shared cached record from Redis.
+
+## Observability
+
+- Balancer exposes aggregated metrics from itself and both backends.
+- Each backend exposes its own metrics and health.
+- Balancer and backends emit JSON-line logs.
 
 ## Runtime
 
 - One shared Node image
-- Three service containers
+- One balancer container
+- Two backend containers
+- One Redis container
 - One test container
-- Health checks on each service

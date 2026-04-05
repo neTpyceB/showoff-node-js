@@ -1,23 +1,17 @@
 import { createServer } from 'node:http';
-import {
-  readAuthSecret,
-  readAuthServiceUrl,
-  readPaymentServiceUrl,
-  readPort,
-  readServiceName
-} from './config.js';
-import { createServiceHandler } from './service-factory.js';
+import { readBackendUrls, readInstanceId, readPort, readRedisUrl, readServiceName } from './config.js';
+import { createRuntimeHandler } from './runtime.js';
 
 const serviceName = readServiceName();
 const port = readPort();
-const server = createServer(
-  createServiceHandler({
-    authSecret: readAuthSecret(),
-    authServiceUrl: readAuthServiceUrl(),
-    paymentServiceUrl: readPaymentServiceUrl(),
-    serviceName
-  })
-);
+const handler = await createRuntimeHandler({
+  backendUrls: readBackendUrls(),
+  instanceId: readInstanceId(),
+  redisUrl: readRedisUrl(),
+  serviceName
+});
+
+const server = createServer(handler);
 
 server.listen(port, () => {
   process.stdout.write(`Listening on ${serviceName} ${port}\n`);
